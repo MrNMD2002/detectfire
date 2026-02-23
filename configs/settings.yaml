@@ -1,0 +1,89 @@
+# Server settings (API + Detector)
+server:
+  host: "0.0.0.0"
+  port: 8080
+  api:
+    host: "0.0.0.0"
+    port: 8080
+  detector:
+    host: "0.0.0.0"
+    grpc_port: 50051
+  grpc_port: 50051
+  metrics_port: 9090
+  # Allowed CORS origins. Leave empty when nginx proxies both frontend and API
+  # (same-origin – no CORS needed). Set to your frontend URL for development or
+  # when the frontend is on a different domain.
+  # Example: cors_origins: ["https://fire.example.com"]
+  cors_origins: []
+
+# Auth (for API)
+auth:
+  jwt_secret: "${JWT_SECRET:-change-me-in-production}"
+  jwt_expiry_hours: 24
+  bcrypt_cost: 12
+
+# Inference settings
+inference:
+  model_path: "/app/models/best.onnx"
+  device: "cuda:0" # Sử dụng GPU
+  warmup_frames: 3
+
+# Logging
+logging:
+  level: "info" # debug, info, warn, error
+  format: "json" # json hoặc pretty
+
+# Default camera settings (có thể override trong cameras.yaml)
+defaults:
+  fps_sample: 3
+  imgsz: 640
+  conf_fire: 0.5
+  conf_smoke: 0.4
+  conf_other: 0.4   # YOLOv26 class 2 - fire-related indicators
+  window_size: 10
+  fire_hits: 3
+  smoke_hits: 3
+  cooldown_sec: 60
+  reconnect_delay_sec: 5
+  max_reconnect_attempts: 10
+
+# API settings
+api:
+  host: "0.0.0.0"
+  port: 8080
+  jwt_secret: "${JWT_SECRET}"
+  jwt_expiry_hours: 24
+  bcrypt_cost: 12
+
+# Database settings
+database:
+  host: "${DB_HOST:-localhost}"
+  port: 5432
+  name: "${DB_NAME:-fire_detect}"
+  user: "${DB_USER:-fire_detect}"
+  password: "${DB_PASSWORD}"
+  max_connections: 10
+  min_connections: 2
+  encryption_key: "${DB_ENCRYPTION_KEY}"
+
+# Telegram settings
+telegram:
+  enabled: true
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  default_chat_id: "${TELEGRAM_CHAT_ID}"
+  rate_limit_per_minute: 10
+
+# Storage settings
+storage:
+  snapshot_path: "/app/snapshots"
+  retention_days: 30
+  snapshots:
+    enabled: true
+    path: "/app/snapshots"
+    retention_days: 30
+
+# Detector connection (for API service)
+detector:
+  host: "detector"
+  grpc_port: 50051
+  # stream_port: 51051  # optional, default = grpc_port + 1000

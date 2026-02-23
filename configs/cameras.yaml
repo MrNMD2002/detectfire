@@ -1,0 +1,31 @@
+# Camera Configuration
+# Production cameras for fire/smoke detection
+#
+# ⚠️  RTSP credentials must NOT be stored here in plaintext.
+#     Use environment variable substitution or a secrets manager.
+#
+# Supported patterns:
+#   rtsp_url: "${CAM_01_RTSP_URL}"   # set env var CAM_01_RTSP_URL at runtime
+#
+# Docker Compose / Kubernetes example:
+#   environment:
+#     CAM_01_RTSP_URL: "rtsp://user:password@10.1.1.174:554/..."
+
+defaults:
+  fps_sample: 3
+  imgsz: 640
+  conf_fire: 0.5
+  conf_smoke: 0.4
+  conf_other: 0.4   # YOLOv26 class 2 - fire-related indicators
+  window_size: 10
+  fire_hits: 3
+  smoke_hits: 3
+  cooldown_sec: 60
+
+cameras:
+  - camera_id: "cam-01"
+    site_id: "site-main"
+    name: "Camera chính - 10.1.1.174"
+    # Set CAM_01_RTSP_URL in your environment / secrets manager
+    rtsp_url: "${CAM_01_RTSP_URL}"
+    enabled: true

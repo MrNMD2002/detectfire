@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                id, site_id, name, description, detector_camera_id,\n                rtsp_url_encrypted, enabled, fps_sample, imgsz, conf_fire, conf_smoke,\n                window_size, fire_hits, smoke_hits, cooldown_sec,\n                created_at, updated_at\n            FROM cameras\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "detector_camera_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "rtsp_url_encrypted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "fps_sample",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "imgsz",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "conf_fire",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 10,
+        "name": "conf_smoke",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 11,
+        "name": "window_size",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "fire_hits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "smoke_hits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "cooldown_sec",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "439d1ca2182c860deb74e1305a0d9521274b88e479e0b85dac78d153d084be6e"
+}

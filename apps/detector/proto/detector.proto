@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package detector;
+
+// Service định nghĩa giao tiếp giữa Detector và API
+service DetectorService {
+  // Stream events từ detector đến API
+  rpc StreamEvents(Empty) returns (stream DetectionEvent);
+  
+  // Health check
+  rpc HealthCheck(Empty) returns (HealthResponse);
+  
+  // Get camera statuses
+  rpc GetCameraStatuses(Empty) returns (CameraStatusList);
+  
+  // Reload camera config
+  rpc ReloadConfig(Empty) returns (ReloadResponse);
+}
+
+message Empty {}
+
+message HealthResponse {
+  bool healthy = 1;
+  string version = 2;
+  int64 uptime_seconds = 3;
+  int32 active_cameras = 4;
+  float avg_inference_ms = 5;
+}
+
+message ReloadResponse {
+  bool success = 1;
+  string message = 2;
+  int32 cameras_loaded = 3;
+}
+
+message CameraStatus {
+  string camera_id = 1;
+  string site_id = 2;
+  string name = 3;
+  
+  enum Status {
+    UNKNOWN = 0;
+    CONNECTING = 1;
+    CONNECTED = 2;
+    STREAMING = 3;
+    RECONNECTING = 4;
+    FAILED = 5;
+    DISABLED = 6;
+  }
+  Status status = 4;
+  
+  int32 reconnect_count = 5;
+  float fps_in = 6;
+  float fps_infer = 7;
+  int64 last_frame_timestamp = 8;
+  string error_message = 9;
+}
+
+message CameraStatusList {
+  repeated CameraStatus cameras = 1;
+}
+
+message BoundingBox {
+  float x = 1;
+  float y = 2;
+  float width = 3;
+  float height = 4;
+}
+
+message Detection {
+  string class_name = 1;  // "fire" or "smoke"
+  float confidence = 2;
+  BoundingBox bbox = 3;
+}
+
+message DetectionEvent {
+  string event_id = 1;
+  
+  enum EventType {
+    FIRE = 0;
+    SMOKE = 1;
+    STREAM_DOWN = 2;
+    STREAM_UP = 3;
+  }
+  EventType event_type = 2;
+  
+  string camera_id = 3;
+  string site_id = 4;
+  int64 timestamp = 5;
+  float confidence = 6;
+  repeated Detection detections = 7;
+  bytes snapshot = 8;  // JPEG encoded image
+  
+  // Metadata
+  float fps_in = 9;
+  float fps_infer = 10;
+  float inference_ms = 11;
+}

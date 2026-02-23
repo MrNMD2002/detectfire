@@ -1,0 +1,47 @@
+# Dependencies
+**/node_modules
+**/target
+**/.venv
+
+# Build artifacts
+**/dist
+**/*.pyc
+**/__pycache__
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.cursor
+.idea
+**/.claude
+
+# Documentation (not needed in Docker)
+docs/
+*.md
+!apps/api/migrations/*.sql
+LICENSE
+
+# Models - best.pt not needed (only best.onnx is used by detector)
+models/best.pt
+models/export_onnx.py
+models/export_and_validate.ps1
+models/requirements.txt
+
+# Deploy scripts (not needed inside images)
+deploy/grafana
+deploy/promtail.yml
+deploy/docker/*.ps1
+deploy/docker/*.md
+deploy/docker/build_log.txt
+deploy/docker/detector-output.txt
+deploy/docker/.env*
+
+# Other
+run_inference.py
+configs/*.bak
+*.log
+*.tmp

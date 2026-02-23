@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE events SET\n                acknowledged = true,\n                acknowledged_by = $2,\n                acknowledged_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6f93f5f0e4f2ed56ae236a8dcc14ad9526d91149ee4092f19ef97c3cc649be35"
+}

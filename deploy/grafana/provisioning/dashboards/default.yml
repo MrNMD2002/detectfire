@@ -1,0 +1,14 @@
+# Grafana Dashboards Provisioning
+apiVersion: 1
+
+providers:
+  - name: "fire-detect-dashboards"
+    orgId: 1
+    folder: "Fire Detection"
+    folderUid: "fire-detect"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

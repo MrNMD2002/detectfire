@@ -1,0 +1,16 @@
+# Loki Datasource for Grafana
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: loki
+          matcherRegex: "camera_id=([\\w-]+)"
+          name: Camera
+          url: "/explore?orgId=1&left=%5B%22now-1h%22,%22now%22,%22Loki%22,%7B%22expr%22:%22%7Bcamera_id%3D%5C%22$${__value.raw}%5C%22%7D%22%7D%5D"

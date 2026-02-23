@@ -1,0 +1,79 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Rust
+target/
+*.rs.bk
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Environment – NEVER commit files with real secrets
+.env
+.env.local
+.env.*.local
+# Explicit guard: only .env.example should be committed, not the real .env
+deploy/docker/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Models (too large for git)
+models/*.onnx
+models/*.pt
+models/*.pth
+
+# Snapshots
+snapshots/
+
+# Database
+*.db
+*.sqlite
+
+# Docker volumes
+postgres_data/
+grafana_data/
+loki_data/
+
+# Secrets
+*.pem
+*.key
+secrets/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Deploy / Docker temp
+deploy/docker/build_log.txt
+deploy/docker/detector-output.txt
+**/check_log.txt
+
+# Temp dev output files at project root
+build_manual.log
+cargo_check*.txt
+cargo_check*.log
+
+# Claude Code internal settings
+.claude/
+
+# Nested git repos (separate projects)
+MBFS_Stream/

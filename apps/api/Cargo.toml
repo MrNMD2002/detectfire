@@ -1,0 +1,90 @@
+[package]
+name = "fire-detect-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["MobifoneSolutions"]
+description = "REST API service for fire/smoke detection system"
+license = "MIT"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full", "tracing"] }
+
+# Web framework
+axum = { version = "0.7", features = ["ws", "multipart", "tokio"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = [
+    "cors",
+    "trace",
+    "compression-gzip",
+    "limit",
+] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Database
+sqlx = { version = "0.7", features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+] }
+
+# Authentication
+jsonwebtoken = "9.2"
+bcrypt = "0.15"
+
+# Encryption
+aes-gcm = "0.10"
+base64 = "0.21"
+rand = "0.8"
+
+# HTTP client (for Telegram)
+reqwest = { version = "0.11", features = ["json", "multipart"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+parking_lot = "0.12"
+dashmap = "5.5"
+
+# Configuration
+config = "0.14"
+
+# Validation
+validator = { version = "0.16", features = ["derive"] }
+
+# gRPC client
+tonic = "0.11"
+prost = "0.12"
+
+# Futures for WebSocket
+futures-util = "0.3"
+
+[build-dependencies]
+tonic-build = "0.11"
+# Bundles pre-compiled protoc so no system installation needed
+protoc-bin-vendored = "3.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[[bin]]
+name = "fire-detect-api"
+path = "src/main.rs"

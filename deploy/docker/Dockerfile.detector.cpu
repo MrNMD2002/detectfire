@@ -1,0 +1,67 @@
+# Detector Service - CPU only
+# ort crate with load-dynamic: ONNX Runtime loaded at runtime via dlopen.
+
+FROM rust:1.88-bookworm AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    cmake pkg-config \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-bad1.0-dev \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav gstreamer1.0-tools \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY apps/detector/Cargo.toml ./
+COPY apps/detector/Cargo.lock ./
+
+RUN mkdir -p src proto \
+    && echo "fn main() {}" > src/main.rs \
+    && echo "fn main() {}" > build.rs
+RUN cargo build --release --no-default-features --features cpu 2>&1 \
+    && rm -rf src build.rs target/release/deps/fire_detect*
+
+COPY apps/detector/build.rs ./
+COPY apps/detector/proto ./proto
+COPY apps/detector/src ./src
+
+RUN rm -rf target/release/build/fire-detect-detector-* \
+           target/release/.fingerprint/fire-detect-detector-* 2>/dev/null || true
+
+RUN cargo build --release --no-default-features --features cpu 2>&1 \
+    && test -f target/release/fire-detector \
+    && chmod +x target/release/fire-detector
+
+# Runtime
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime deps + download ONNX Runtime (load-dynamic needs it at runtime)
+ARG ORT_VERSION=1.23.2
+RUN apt-get update && apt-get install -y \
+    libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+    ca-certificates procps curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz" \
+       | tar xz -C /tmp \
+    && cp /tmp/onnxruntime-linux-x64-${ORT_VERSION}/lib/libonnxruntime.so.${ORT_VERSION} /usr/local/lib/ \
+    && ln -s libonnxruntime.so.${ORT_VERSION} /usr/local/lib/libonnxruntime.so \
+    && rm -rf /tmp/onnxruntime-* \
+    && ldconfig
+
+COPY --from=builder /app/target/release/fire-detector /usr/local/bin/fire-detector
+RUN chmod +x /usr/local/bin/fire-detector
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
+ENV RUST_LOG=info
+ENV CONFIG_DIR=/app/configs
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD pgrep -f fire-detector || exit 1
+
+ENTRYPOINT ["/usr/local/bin/fire-detector"]

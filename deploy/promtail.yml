@@ -1,0 +1,84 @@
+# Promtail Configuration for Fire & Smoke Detection System
+# Collects logs from Docker containers and sends to Loki
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    tenant_id: fire-detect
+
+scrape_configs:
+  # Docker container logs
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Keep only fire-detect containers
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/fire-detect-.*"
+        action: keep
+
+      # Extract container name as label
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.+)"
+        target_label: container
+
+      # Extract service name
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/fire-detect-(.*)"
+        target_label: service
+
+      # Add environment label
+      - source_labels: []
+        target_label: env
+        replacement: production
+
+      # Add project label
+      - source_labels: []
+        target_label: project
+        replacement: fire-detect
+
+    pipeline_stages:
+      # Parse JSON logs
+      - json:
+          expressions:
+            level: level
+            message: message
+            target: target
+            camera_id: camera_id
+            site_id: site_id
+            event_type: event_type
+            inference_ms: inference_ms
+
+      # Extract labels from JSON
+      - labels:
+          level:
+          camera_id:
+          site_id:
+          event_type:
+
+      # Timestamp from JSON
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+          fallback_formats:
+            - RFC3339
+
+      # Output message
+      - output:
+          source: message
+
+  # Static log files (optional)
+  - job_name: static
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: fire-detect-logs
+          __path__: /var/log/fire-detect/*.log

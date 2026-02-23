@@ -1,0 +1,68 @@
+# Fire & Smoke Detection System - Development Compose
+# Use this for local development with hot reload
+
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: fire-detect-db-dev
+    environment:
+      POSTGRES_DB: fire_detect
+      POSTGRES_USER: fire_detect
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - fire-detect-net
+
+  # Loki (Log aggregation)
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: fire-detect-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - fire-detect-net
+
+  # Promtail (Log collector)
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: fire-detect-promtail
+    volumes:
+      - ../promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - fire-detect-net
+    depends_on:
+      - loki
+
+  # Grafana (Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fire-detect-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_dev_data:/var/lib/grafana
+    networks:
+      - fire-detect-net
+    depends_on:
+      - loki
+
+volumes:
+  postgres_dev_data:
+  grafana_dev_data:
+
+networks:
+  fire-detect-net:
+    driver: bridge

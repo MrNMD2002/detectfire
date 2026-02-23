@@ -1,0 +1,104 @@
+# Detector Service - GPU (CUDA)
+# ort crate tự download ONNX Runtime 1.23.2 (matching version) qua feature download-binaries.
+# Không cần cài thủ công ONNX Runtime → tránh lỗi version mismatch / linker.
+
+# ========== Stage 1: Build ==========
+FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+# Build dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    cmake \
+    pkg-config \
+    build-essential \
+    libssl-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-bad1.0-dev \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    gstreamer1.0-tools \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# KHÔNG cài ONNX Runtime thủ công.
+# ort crate (download-binaries feature) tự download đúng bản ONNX Runtime 1.23.2.
+
+# Copy manifest
+COPY apps/detector/Cargo.toml ./
+COPY apps/detector/Cargo.lock ./
+
+# Dummy build để cache dependencies
+RUN mkdir -p src proto \
+    && echo "fn main() {}" > src/main.rs \
+    && echo "fn main() {}" > build.rs
+RUN cargo build --release 2>&1 \
+    && rm -rf src build.rs target/release/deps/fire_detect*
+
+# Copy source thật
+COPY apps/detector/build.rs ./
+COPY apps/detector/proto ./proto
+COPY apps/detector/src ./src
+
+# Xóa fingerprint cũ để force rebuild binary
+RUN rm -rf target/release/build/fire-detect-detector-* \
+    target/release/.fingerprint/fire-detect-detector-* 2>/dev/null || true
+
+# Build binary thật
+RUN cargo build --release 2>&1 | tee /tmp/build.log \
+    && test -f target/release/fire-detector \
+    && chmod +x target/release/fire-detector
+
+# Copy ALL ONNX Runtime libs: from target/release and from ort_sys build out dir (core lib may be there)
+RUN mkdir -p /ort-libs \
+    && ( find target/release -name "libonnxruntime*.so*" 2>/dev/null | sort -u | while read f; do cp -L "$f" /ort-libs/ 2>/dev/null || true; done ) \
+    && ( for d in target/release/build/ort_sys-*/out target/release/build/ort-sys-*/out; do [ -d "$d" ] && cp -L "$d"/libonnxruntime*.so* /ort-libs/ 2>/dev/null || true; done ) \
+    && ( for d in target/release/build/ort_sys-*/out target/release/build/ort-sys-*/out; do [ -d "$d" ] && cp -L "$d"/*.so* /ort-libs/ 2>/dev/null || true; done ) \
+    && ls -lah /ort-libs/ \
+    && test -n "$(ls -A /ort-libs 2>/dev/null)" \
+    && echo "ONNX Runtime libraries collected"
+
+# ========== Stage 2: Runtime ==========
+FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+
+WORKDIR /app
+
+# Runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libgstreamer1.0-0 \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    ca-certificates \
+    curl \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Binary
+COPY --from=builder /app/target/release/fire-detector /usr/local/bin/fire-detector
+RUN chmod +x /usr/local/bin/fire-detector
+
+# ONNX Runtime shared libraries (downloaded by ort during build)
+COPY --from=builder /ort-libs/ /usr/local/lib/
+RUN ldconfig
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
+ENV RUST_LOG=info
+ENV CONFIG_DIR=/app/configs
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD pgrep -f fire-detector || exit 1
+
+ENTRYPOINT ["/usr/local/bin/fire-detector"]

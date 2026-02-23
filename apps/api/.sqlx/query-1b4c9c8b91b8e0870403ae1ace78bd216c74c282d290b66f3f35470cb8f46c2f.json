@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, event_type, camera_id, site_id, timestamp,\n                confidence, detections, snapshot_path, metadata,\n                acknowledged, acknowledged_by, acknowledged_at\n            FROM events\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "camera_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "confidence",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 6,
+        "name": "detections",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "snapshot_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
+        "name": "acknowledged",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "acknowledged_by",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "acknowledged_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "1b4c9c8b91b8e0870403ae1ace78bd216c74c282d290b66f3f35470cb8f46c2f"
+}

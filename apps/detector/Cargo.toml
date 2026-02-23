@@ -1,0 +1,88 @@
+[package]
+name = "fire-detect-detector"
+version = "0.1.0"
+edition = "2021"
+authors = ["MobifoneSolutions"]
+description = "Multi-camera RTSP fire/smoke detection service using YOLOv10"
+license = "MIT"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# panic = "abort"  # Commented to get panic messages
+debug = 1 # Include debug info for better error messages
+
+[features]
+default = ["gpu"]
+gpu = ["ort/cuda", "ort/tensorrt"]
+cpu = ["ort/load-dynamic"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full", "tracing"] }
+
+# Configuration
+config = "0.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# ONNX Runtime - default features include download-binaries (downloads correct ORT 1.23.2)
+# GPU features (cuda/tensorrt) are activated via [features] section above
+ort = "2.0.0-rc.11"
+ndarray = "0.15"
+
+# Image processing
+image = { version = "0.25", features = ["jpeg", "png"] }
+imageproc = "0.24"
+
+# GStreamer for RTSP
+gstreamer = "0.22"
+gstreamer-app = "0.22"
+gstreamer-video = "0.22"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+parking_lot = "0.12"
+dashmap = "5.5"
+
+# Channels
+crossbeam-channel = "0.5"
+flume = "0.11"
+
+# gRPC for API communication
+tonic = "0.11"
+prost = "0.12"
+async-stream = "0.3"
+tokio-stream = "0.1"
+
+# Regex for config parsing
+regex = "1.10"
+
+# Metrics
+metrics = "0.22"
+metrics-exporter-prometheus = "0.13"
+
+# HTTP server for HLS streams
+axum = { version = "0.7", features = ["tokio"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors"] }
+
+[build-dependencies]
+tonic-build = "0.11"
+
+# Moved to [package] section above
+
+[[bin]]
+name = "fire-detector"
+path = "src/main.rs"

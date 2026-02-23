@@ -1,0 +1,88 @@
+# API Service Dockerfile
+# Multi-stage build
+
+# Stage 1: Build
+FROM rust:1.88-bookworm AS builder
+
+WORKDIR /app
+
+# Install protobuf compiler and PostgreSQL client (for migrations)
+RUN apt-get update && apt-get install -y protobuf-compiler postgresql-client && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests and lock file
+COPY apps/api/Cargo.toml ./
+COPY apps/api/Cargo.lock ./
+
+# Create dummy src for dependency caching
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
+
+# Build dependencies
+RUN cargo build --release && rm -rf src target/release/deps/fire_detect*
+
+# Copy build.rs and proto for code generation
+COPY apps/api/build.rs ./
+COPY apps/detector/proto ../detector/proto/
+
+# Copy actual source
+COPY apps/api/src ./src
+COPY apps/api/migrations ./migrations
+
+# Clean build artifacts to ensure proto generation runs
+RUN rm -rf target/release/build/fire-detect-api-* target/release/.fingerprint/fire-detect-api-* || true
+
+# DATABASE_URL is required at build time for SQLx compile-time query verification.
+# A PostgreSQL instance with the schema must be reachable during build.
+# docker-compose.yml passes this via build args; the DB container should be running first.
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL:-postgres://fire_detect:devpassword@host.docker.internal:5432/fire_detect}
+
+# Wait for DB (max 30s), apply migrations, then build
+RUN echo "Waiting for database at $DATABASE_URL ..." && \
+    for i in $(seq 1 30); do \
+        pg_isready -d "$DATABASE_URL" > /dev/null 2>&1 && break; \
+        [ $i -eq 30 ] && echo "ERROR: Database not reachable. Start postgres before building." && exit 1; \
+        sleep 1; \
+    done && \
+    echo "Database ready. Applying migrations..." && \
+    for f in migrations/*.sql; do \
+        echo "  -> $f"; \
+        psql "$DATABASE_URL" -f "$f" 2>&1 | tail -1; \
+    done && \
+    echo "Building API..." && \
+    cargo build --release
+
+# Stage 2: Runtime
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime deps
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary
+COPY --from=builder /app/target/release/fire-detect-api /usr/local/bin/
+
+# Copy migrations
+COPY apps/api/migrations /app/migrations
+
+# Create non-root user
+RUN useradd -r -u 1000 api
+USER api
+
+# Environment
+ENV RUST_LOG=info
+ENV CONFIG_DIR=/app/configs
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run
+ENTRYPOINT ["fire-detect-api"]

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cameras SET\n                site_id = COALESCE($2, site_id),\n                name = COALESCE($3, name),\n                description = COALESCE($4, description),\n                detector_camera_id = COALESCE($5, detector_camera_id),\n                rtsp_url_encrypted = $6,\n                enabled = COALESCE($7, enabled),\n                fps_sample = COALESCE($8, fps_sample),\n                imgsz = COALESCE($9, imgsz),\n                conf_fire = COALESCE($10, conf_fire),\n                conf_smoke = COALESCE($11, conf_smoke),\n                window_size = COALESCE($12, window_size),\n                fire_hits = COALESCE($13, fire_hits),\n                smoke_hits = COALESCE($14, smoke_hits),\n                cooldown_sec = COALESCE($15, cooldown_sec),\n                updated_at = NOW()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Text",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Float4",
+        "Float4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f9d02b5aadc05f2fc9b3c1b32d35282eaac311cc634fa28a44cbb336d76ddf0"
+}
