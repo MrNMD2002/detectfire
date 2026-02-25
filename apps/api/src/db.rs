@@ -53,9 +53,10 @@ impl Database {
         let rows = sqlx::query_as!(
             CameraRow,
             r#"
-            SELECT 
+            SELECT
                 id, site_id, name, description, detector_camera_id,
-                rtsp_url_encrypted, enabled, fps_sample, imgsz, conf_fire, conf_smoke,
+                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,
+                conf_fire, conf_smoke, conf_other,
                 window_size, fire_hits, smoke_hits, cooldown_sec,
                 created_at, updated_at
             FROM cameras
@@ -75,9 +76,10 @@ impl Database {
         let row = sqlx::query_as!(
             CameraRow,
             r#"
-            SELECT 
+            SELECT
                 id, site_id, name, description, detector_camera_id,
-                rtsp_url_encrypted, enabled, fps_sample, imgsz, conf_fire, conf_smoke,
+                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,
+                conf_fire, conf_smoke, conf_other,
                 window_size, fire_hits, smoke_hits, cooldown_sec,
                 created_at, updated_at
             FROM cameras
@@ -99,9 +101,10 @@ impl Database {
         let row = sqlx::query_as!(
             CameraRow,
             r#"
-            SELECT 
+            SELECT
                 id, site_id, name, description, detector_camera_id,
-                rtsp_url_encrypted, enabled, fps_sample, imgsz, conf_fire, conf_smoke,
+                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,
+                conf_fire, conf_smoke, conf_other,
                 window_size, fire_hits, smoke_hits, cooldown_sec,
                 created_at, updated_at
             FROM cameras
@@ -118,20 +121,27 @@ impl Database {
         }
     }
     
-    /// Create camera
+    /// Create camera — single round-trip via INSERT ... RETURNING
     pub async fn create_camera(&self, input: &CreateCameraInput) -> Result<Camera> {
         let id = Uuid::new_v4();
         let encrypted_url = self.encrypt(&input.rtsp_url)?;
-        
-        sqlx::query!(
+
+        let row = sqlx::query_as!(
+            CameraRow,
             r#"
             INSERT INTO cameras (
                 id, site_id, name, description, detector_camera_id, rtsp_url_encrypted,
-                enabled, fps_sample, imgsz, conf_fire, conf_smoke,
+                enabled, codec, fps_sample, imgsz, conf_fire, conf_smoke, conf_other,
                 window_size, fire_hits, smoke_hits, cooldown_sec
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
             )
+            RETURNING
+                id, site_id, name, description, detector_camera_id,
+                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,
+                conf_fire, conf_smoke, conf_other,
+                window_size, fire_hits, smoke_hits, cooldown_sec,
+                created_at, updated_at
             "#,
             id,
             input.site_id,
@@ -140,34 +150,38 @@ impl Database {
             input.detector_camera_id,
             encrypted_url,
             input.enabled.unwrap_or(true),
+            input.codec.as_deref().unwrap_or("h264"),
             input.fps_sample.unwrap_or(3) as i32,
             input.imgsz.unwrap_or(640) as i32,
             input.conf_fire.unwrap_or(0.5),
             input.conf_smoke.unwrap_or(0.4),
+            input.conf_other.unwrap_or(0.4),
             input.window_size.unwrap_or(10) as i32,
             input.fire_hits.unwrap_or(3) as i32,
             input.smoke_hits.unwrap_or(3) as i32,
             input.cooldown_sec.unwrap_or(60) as i32
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        
-        Ok(self.get_camera(&id).await?.unwrap())
+
+        self.row_to_camera(row)
     }
     
-    /// Update camera
+    /// Update camera — returns updated row via UPDATE ... RETURNING (2 queries instead of 3)
     pub async fn update_camera(&self, id: &Uuid, input: &UpdateCameraInput) -> Result<Option<Camera>> {
+        // First fetch is necessary to re-encrypt RTSP URL when not provided in input
         let existing = match self.get_camera(id).await? {
             Some(c) => c,
             None => return Ok(None),
         };
-        
+
         let encrypted_url = match &input.rtsp_url {
             Some(url) => self.encrypt(url)?,
             None => self.encrypt(&existing.rtsp_url)?,
         };
-        
-        sqlx::query!(
+
+        let row = sqlx::query_as!(
+            CameraRow,
             r#"
             UPDATE cameras SET
                 site_id = COALESCE($2, site_id),
@@ -176,16 +190,24 @@ impl Database {
                 detector_camera_id = COALESCE($5, detector_camera_id),
                 rtsp_url_encrypted = $6,
                 enabled = COALESCE($7, enabled),
-                fps_sample = COALESCE($8, fps_sample),
-                imgsz = COALESCE($9, imgsz),
-                conf_fire = COALESCE($10, conf_fire),
-                conf_smoke = COALESCE($11, conf_smoke),
-                window_size = COALESCE($12, window_size),
-                fire_hits = COALESCE($13, fire_hits),
-                smoke_hits = COALESCE($14, smoke_hits),
-                cooldown_sec = COALESCE($15, cooldown_sec),
+                codec = COALESCE($8, codec),
+                fps_sample = COALESCE($9, fps_sample),
+                imgsz = COALESCE($10, imgsz),
+                conf_fire = COALESCE($11, conf_fire),
+                conf_smoke = COALESCE($12, conf_smoke),
+                conf_other = COALESCE($13, conf_other),
+                window_size = COALESCE($14, window_size),
+                fire_hits = COALESCE($15, fire_hits),
+                smoke_hits = COALESCE($16, smoke_hits),
+                cooldown_sec = COALESCE($17, cooldown_sec),
                 updated_at = NOW()
             WHERE id = $1
+            RETURNING
+                id, site_id, name, description, detector_camera_id,
+                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,
+                conf_fire, conf_smoke, conf_other,
+                window_size, fire_hits, smoke_hits, cooldown_sec,
+                created_at, updated_at
             "#,
             id,
             input.site_id,
@@ -194,19 +216,24 @@ impl Database {
             input.detector_camera_id,
             encrypted_url,
             input.enabled,
+            input.codec,
             input.fps_sample.map(|v| v as i32),
             input.imgsz.map(|v| v as i32),
             input.conf_fire,
             input.conf_smoke,
+            input.conf_other,
             input.window_size.map(|v| v as i32),
             input.fire_hits.map(|v| v as i32),
             input.smoke_hits.map(|v| v as i32),
             input.cooldown_sec.map(|v| v as i32)
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
-        
-        self.get_camera(id).await
+
+        match row {
+            Some(r) => Ok(Some(self.row_to_camera(r)?)),
+            None => Ok(None),
+        }
     }
     
     /// Delete camera
@@ -220,16 +247,18 @@ impl Database {
     
     // ========== Event Operations ==========
 
-    /// Get a single event by its primary key.
+    /// Get a single event by its primary key, with camera name via LEFT JOIN.
     pub async fn get_event_by_id(&self, id: &Uuid) -> Result<Option<Event>> {
         let row = sqlx::query!(
             r#"
             SELECT
-                id, event_type, camera_id, site_id, timestamp,
-                confidence, detections, snapshot_path, metadata,
-                acknowledged, acknowledged_by, acknowledged_at
-            FROM events
-            WHERE id = $1
+                e.id, e.event_type, e.camera_id, e.site_id, e.timestamp,
+                e.confidence, e.detections, e.snapshot_path, e.metadata,
+                e.acknowledged, e.acknowledged_by, e.acknowledged_at,
+                c.name AS "camera_name?"
+            FROM events e
+            LEFT JOIN cameras c ON e.camera_id = c.id
+            WHERE e.id = $1
             "#,
             id
         )
@@ -240,6 +269,7 @@ impl Database {
             id: r.id,
             event_type: r.event_type,
             camera_id: r.camera_id,
+            camera_name: r.camera_name,
             site_id: r.site_id,
             timestamp: r.timestamp,
             confidence: r.confidence,
@@ -256,36 +286,39 @@ impl Database {
     ///
     /// Uses `QueryBuilder` so every dynamic value — including LIMIT and OFFSET —
     /// is passed as a bound parameter ($N), preventing SQL injection.
+    /// Includes `camera_name` via LEFT JOIN for display in the UI.
     pub async fn list_events(&self, filter: &EventFilter) -> Result<Vec<Event>> {
         let mut qb: QueryBuilder<sqlx::Postgres> = QueryBuilder::new(
             r#"SELECT
-                id, event_type, camera_id, site_id, timestamp,
-                confidence, detections, snapshot_path, metadata,
-                acknowledged, acknowledged_by, acknowledged_at
-            FROM events
+                e.id, e.event_type, e.camera_id, e.site_id, e.timestamp,
+                e.confidence, e.detections, e.snapshot_path, e.metadata,
+                e.acknowledged, e.acknowledged_by, e.acknowledged_at,
+                c.name AS camera_name
+            FROM events e
+            LEFT JOIN cameras c ON e.camera_id = c.id
             WHERE 1=1"#,
         );
 
         if let Some(camera_id) = &filter.camera_id {
-            qb.push(" AND camera_id = ").push_bind(*camera_id);
+            qb.push(" AND e.camera_id = ").push_bind(*camera_id);
         }
         if let Some(site_id) = &filter.site_id {
-            qb.push(" AND site_id = ").push_bind(site_id.as_str());
+            qb.push(" AND e.site_id = ").push_bind(site_id.as_str());
         }
         if let Some(event_type) = &filter.event_type {
-            qb.push(" AND event_type = ").push_bind(event_type.as_str());
+            qb.push(" AND e.event_type = ").push_bind(event_type.as_str());
         }
         if let Some(start_time) = filter.start_time {
-            qb.push(" AND timestamp >= ").push_bind(start_time);
+            qb.push(" AND e.timestamp >= ").push_bind(start_time);
         }
         if let Some(end_time) = filter.end_time {
-            qb.push(" AND timestamp <= ").push_bind(end_time);
+            qb.push(" AND e.timestamp <= ").push_bind(end_time);
         }
         if let Some(acknowledged) = filter.acknowledged {
-            qb.push(" AND acknowledged = ").push_bind(acknowledged);
+            qb.push(" AND e.acknowledged = ").push_bind(acknowledged);
         }
 
-        qb.push(" ORDER BY timestamp DESC");
+        qb.push(" ORDER BY e.timestamp DESC");
 
         // Clamp limit/offset to safe ranges – values are i32 from the type
         // system, but we add explicit bounds to prevent absurdly large pages.
@@ -306,6 +339,7 @@ impl Database {
                 id: row.get("id"),
                 event_type: row.get("event_type"),
                 camera_id: row.get("camera_id"),
+                camera_name: row.get("camera_name"),
                 site_id: row.get("site_id"),
                 timestamp: row.get("timestamp"),
                 confidence: row.get("confidence"),
@@ -319,6 +353,33 @@ impl Database {
             .collect();
 
         Ok(events)
+    }
+
+    /// Count events matching a filter (for pagination total).
+    pub async fn count_events(&self, filter: &EventFilter) -> Result<i64> {
+        let mut qb: QueryBuilder<sqlx::Postgres> = QueryBuilder::new(
+            "SELECT COUNT(*) AS cnt FROM events e WHERE 1=1",
+        );
+        if let Some(camera_id) = &filter.camera_id {
+            qb.push(" AND e.camera_id = ").push_bind(*camera_id);
+        }
+        if let Some(site_id) = &filter.site_id {
+            qb.push(" AND e.site_id = ").push_bind(site_id.as_str());
+        }
+        if let Some(event_type) = &filter.event_type {
+            qb.push(" AND e.event_type = ").push_bind(event_type.as_str());
+        }
+        if let Some(start_time) = filter.start_time {
+            qb.push(" AND e.timestamp >= ").push_bind(start_time);
+        }
+        if let Some(end_time) = filter.end_time {
+            qb.push(" AND e.timestamp <= ").push_bind(end_time);
+        }
+        if let Some(acknowledged) = filter.acknowledged {
+            qb.push(" AND e.acknowledged = ").push_bind(acknowledged);
+        }
+        let row = qb.build().fetch_one(&self.pool).await?;
+        Ok(row.get("cnt"))
     }
 
     /// Aggregate event counts using SQL for efficiency.
@@ -359,16 +420,20 @@ impl Database {
         })
     }
     
-    /// Save event
+    /// Save event — single round-trip via INSERT ... RETURNING
     pub async fn save_event(&self, event: &CreateEventInput) -> Result<Event> {
         let id = Uuid::new_v4();
-        
-        sqlx::query!(
+
+        let row = sqlx::query!(
             r#"
             INSERT INTO events (
                 id, event_type, camera_id, site_id, timestamp,
                 confidence, detections, snapshot_path, metadata
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING
+                id, event_type, camera_id, site_id, timestamp,
+                confidence, detections, snapshot_path, metadata,
+                acknowledged, acknowledged_by, acknowledged_at
             "#,
             id,
             event.event_type,
@@ -380,23 +445,14 @@ impl Database {
             event.snapshot_path,
             event.metadata
         )
-        .execute(&self.pool)
-        .await?;
-        
-        // Return created event
-        let row = sqlx::query!(
-            r#"
-            SELECT * FROM events WHERE id = $1
-            "#,
-            id
-        )
         .fetch_one(&self.pool)
         .await?;
-        
+
         Ok(Event {
             id: row.id,
             event_type: row.event_type,
             camera_id: row.camera_id,
+            camera_name: None, // not needed for internal save path
             site_id: row.site_id,
             timestamp: row.timestamp,
             confidence: row.confidence,
@@ -408,7 +464,7 @@ impl Database {
             acknowledged_at: row.acknowledged_at,
         })
     }
-    
+
     /// Acknowledge event
     pub async fn acknowledge_event(&self, id: &Uuid, user_id: &Uuid) -> Result<bool> {
         let result = sqlx::query!(
@@ -505,7 +561,7 @@ impl Database {
     /// Convert database row to Camera model
     fn row_to_camera(&self, row: CameraRow) -> Result<Camera> {
         let rtsp_url = self.decrypt(&row.rtsp_url_encrypted)?;
-        
+
         Ok(Camera {
             id: row.id,
             site_id: row.site_id,
@@ -514,10 +570,12 @@ impl Database {
             detector_camera_id: row.detector_camera_id,
             rtsp_url,
             enabled: row.enabled,
+            codec: row.codec,
             fps_sample: row.fps_sample as u32,
             imgsz: row.imgsz as u32,
             conf_fire: row.conf_fire,
             conf_smoke: row.conf_smoke,
+            conf_other: row.conf_other,
             window_size: row.window_size as u32,
             fire_hits: row.fire_hits as u32,
             smoke_hits: row.smoke_hits as u32,
@@ -538,10 +596,12 @@ struct CameraRow {
     detector_camera_id: Option<String>,
     rtsp_url_encrypted: String,
     enabled: bool,
+    codec: String,
     fps_sample: i32,
     imgsz: i32,
     conf_fire: f32,
     conf_smoke: f32,
+    conf_other: f32,
     window_size: i32,
     fire_hits: i32,
     smoke_hits: i32,

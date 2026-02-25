@@ -72,6 +72,9 @@ telegram:
   bot_token: "${TELEGRAM_BOT_TOKEN}"
   default_chat_id: "${TELEGRAM_CHAT_ID}"
   rate_limit_per_minute: 10
+  rate_limit:
+    max_per_minute: 10
+    cooldown_sec: 60
 
 # Storage settings
 storage:

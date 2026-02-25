@@ -1,15 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Flame, Wind, CheckCircle } from 'lucide-react';
+import { Flame, Wind, CheckCircle, ChevronLeft, ChevronRight, Image } from 'lucide-react';
 import { eventsApi } from '@/lib/api';
 import { useState } from 'react';
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
 export default function EventsPage() {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState({ event_type: '', limit: 50 });
+  const [filter, setFilter] = useState({ event_type: '' });
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [snapshotModal, setSnapshotModal] = useState<string | null>(null);
 
-  const { data: events, isLoading } = useQuery({
-    queryKey: ['events', filter],
-    queryFn: () => eventsApi.list(filter),
+  const { data: eventsPage, isLoading } = useQuery({
+    queryKey: ['events', filter, page, pageSize],
+    queryFn: () => eventsApi.list({
+      event_type: filter.event_type || undefined,
+      limit: pageSize,
+      offset: page * pageSize,
+    }),
   });
 
   const acknowledgeMutation = useMutation({
@@ -17,7 +26,14 @@ export default function EventsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['events'] }),
   });
 
-  const eventsData = events || [];
+  const eventsData: any[] = eventsPage?.data || [];
+  const total: number = eventsPage?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const handleFilterChange = (event_type: string) => {
+    setFilter({ event_type });
+    setPage(0);
+  };
 
   return (
     <>
@@ -27,18 +43,40 @@ export default function EventsPage() {
       </header>
 
       <div className="page-content">
+        {/* Filter bar */}
         <div className="card" style={{ marginBottom: 16 }}>
-          <div className="flex gap-4">
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <select
               className="form-input"
-              style={{ width: 200 }}
+              style={{ width: 180 }}
               value={filter.event_type}
-              onChange={(e) => setFilter({ ...filter, event_type: e.target.value })}
+              onChange={(e) => handleFilterChange(e.target.value)}
             >
               <option value="">Tất cả loại</option>
               <option value="fire">🔥 Cháy</option>
               <option value="smoke">💨 Khói</option>
             </select>
+
+            {total > 0 && (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                {total.toLocaleString('vi-VN')} sự kiện
+              </span>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Hiển thị:</span>
+              <select
+                className="form-input"
+                style={{ width: 80 }}
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+              >
+                {PAGE_SIZE_OPTIONS.map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>/ trang</span>
+            </div>
           </div>
         </div>
 
@@ -50,37 +88,105 @@ export default function EventsPage() {
             <h3>Không có sự kiện nào</h3>
           </div>
         ) : (
-          <div className="events-timeline">
-            {eventsData.map((event: any) => (
-              <div key={event.id} className={`event-item ${event.event_type}`}>
-                <div className="event-content">
-                  <div className="event-header">
-                    <span className={`badge ${event.event_type === 'fire' ? 'badge-fire' : 'badge-smoke'}`}>
-                      {event.event_type === 'fire' ? <><Flame size={14} /> Cháy</> : <><Wind size={14} /> Khói</>}
-                    </span>
-                    <span className="event-camera">{event.camera_id}</span>
-                    <span className="event-time">{new Date(event.timestamp).toLocaleString('vi-VN')}</span>
-                  </div>
-                  <div className="event-details">
-                    <span>📍 {event.site_id}</span>
-                    <span>🎯 {(event.confidence * 100).toFixed(1)}%</span>
-                    {event.acknowledged ? (
-                      <span style={{ color: 'var(--color-success)' }}>✓ Đã xác nhận</span>
+          <>
+            <div className="events-timeline">
+              {eventsData.map((event: any) => (
+                <div key={event.id} className={`event-item ${event.event_type}`}>
+                  {/* Snapshot thumbnail */}
+                  <div
+                    className="event-thumbnail"
+                    style={{ cursor: event.snapshot_path ? 'pointer' : 'default' }}
+                    onClick={() => event.snapshot_path && setSnapshotModal(event.snapshot_path)}
+                  >
+                    {event.snapshot_path ? (
+                      <img
+                        src={`/api/snapshots/${event.snapshot_path}`}
+                        alt="Snapshot"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
                     ) : (
-                      <button
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => acknowledgeMutation.mutate(event.id)}
-                      >
-                        Xác nhận
-                      </button>
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                        {event.event_type === 'fire' ? <Flame size={20} /> : <Wind size={20} />}
+                      </div>
                     )}
                   </div>
+
+                  <div className="event-content">
+                    <div className="event-header">
+                      <span className={`badge ${event.event_type === 'fire' ? 'badge-fire' : 'badge-smoke'}`}>
+                        {event.event_type === 'fire' ? <><Flame size={14} /> Cháy</> : <><Wind size={14} /> Khói</>}
+                      </span>
+                      <span className="event-camera">{event.camera_name || event.site_id}</span>
+                      <span className="event-time">{new Date(event.timestamp).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <div className="event-details">
+                      <span>📍 {event.site_id}</span>
+                      <span>🎯 {(event.confidence * 100).toFixed(1)}%</span>
+                      {event.snapshot_path && (
+                        <span
+                          style={{ cursor: 'pointer', color: 'var(--color-primary)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                          onClick={() => setSnapshotModal(event.snapshot_path)}
+                        >
+                          <Image size={13} /> Ảnh
+                        </span>
+                      )}
+                      {event.acknowledged ? (
+                        <span style={{ color: 'var(--color-success)' }}>✓ Đã xác nhận</span>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          disabled={acknowledgeMutation.isPending}
+                          onClick={() => acknowledgeMutation.mutate(event.id)}
+                        >
+                          Xác nhận
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            {/* Pagination controls */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16, padding: '8px 0' }}>
+              <button
+                className="btn btn-secondary"
+                disabled={page === 0}
+                onClick={() => setPage(p => p - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+                Trang {page + 1} / {totalPages}
+              </span>
+              <button
+                className="btn btn-secondary"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage(p => p + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </>
         )}
       </div>
+
+      {/* Snapshot lightbox */}
+      {snapshotModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => setSnapshotModal(null)}
+          style={{ zIndex: 1000 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh' }}>
+            <img
+              src={`/api/snapshots/${snapshotModal}`}
+              alt="Snapshot"
+              style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

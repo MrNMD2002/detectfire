@@ -147,7 +147,7 @@ impl InferenceEngine {
         info!(frames = num_frames, size = input_size, "Warming up inference engine");
         
         let dummy_frame = Frame {
-            data: vec![128u8; (input_size * input_size * 3) as usize],
+            data: Arc::new(vec![128u8; (input_size * input_size * 3) as usize]),
             width: input_size,
             height: input_size,
             timestamp: 0,

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import Hls from 'hls.js';
 import { X, Video, AlertTriangle } from 'lucide-react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthStore } from '@/stores/authStore';
@@ -25,16 +24,15 @@ interface CameraStreamModalProps {
 }
 
 export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStreamModalProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamLoading, setStreamLoading] = useState(true);
   const [lastDetections, setLastDetections] = useState<Detection[]>([]);
   const token = useAuthStore((s) => s.token);
 
-  // WebSocket: nhận detection events cho camera này
+  // WebSocket: receive detection events for this camera
   useWebSocket({
     onMessage: (msg: StreamEvent) => {
       if (msg.camera_id === camera.id && (msg.event_type === 'fire' || msg.event_type === 'smoke')) {
@@ -43,20 +41,20 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
     },
   });
 
-  // Vẽ overlay detection lên canvas
+  // Draw detection overlay on canvas
   useEffect(() => {
-    const video = videoRef.current;
+    const img = imgRef.current;
     const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!video || !canvas || !container || lastDetections.length === 0) return;
+    if (!img || !canvas || !container || lastDetections.length === 0) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const draw = () => {
-      const rect = video.getBoundingClientRect();
-      const scaleX = rect.width / (video.videoWidth || 640);
-      const scaleY = rect.height / (video.videoHeight || 360);
+      const rect = img.getBoundingClientRect();
+      const scaleX = rect.width / (img.naturalWidth || 640);
+      const scaleY = rect.height / (img.naturalHeight || 640);
 
       canvas.width = rect.width;
       canvas.height = rect.height;
@@ -64,7 +62,6 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
 
       for (const det of lastDetections) {
         const bbox = det.bbox;
-        // bbox có thể là normalized (0-1) hoặc pixel
         const isNormalized = bbox.x <= 1 && bbox.y <= 1 && bbox.width <= 1 && bbox.height <= 1;
         const x = isNormalized ? bbox.x * rect.width : bbox.x * scaleX;
         const y = isNormalized ? bbox.y * rect.height : bbox.y * scaleY;
@@ -88,53 +85,109 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
     return () => clearInterval(interval);
   }, [lastDetections]);
 
-  // HLS stream - chỉ load khi modal mở
+  // MJPEG stream via fetch (MBFS-Stream approach)
+  // Uses fetch + Authorization header instead of <img src> so JWT auth works.
+  // Parses JPEG frames from the multipart/x-mixed-replace stream by scanning for
+  // SOI (FF D8) and EOI (FF D9) JPEG markers, then creates blob URLs for display.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !camera.id) return;
+    if (!camera.id) return;
 
-    const playlistUrl = `/api/cameras/${camera.id}/stream/playlist.m3u8`;
+    const controller = new AbortController();
+    let currentBlobUrl: string | null = null;
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        xhrSetup: (xhr) => {
-          if (token) {
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-          }
-        },
-      });
+    const startStream = async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      hls.loadSource(playlistUrl);
-      hls.attachMedia(video);
+        const response = await fetch(`/api/cameras/${camera.id}/stream/mjpeg`, {
+          headers,
+          signal: controller.signal,
+        });
 
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (!response.ok || !response.body) {
+          setStreamLoading(false);
+          setStreamError(
+            response.status === 404
+              ? 'Camera chưa được detector nhận dạng — kiểm tra detector_camera_id'
+              : 'Không kết nối được stream'
+          );
+          return;
+        }
+
         setStreamLoading(false);
         setStreamError(null);
-      });
 
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          setStreamLoading(false);
-          setStreamError(data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'Không kết nối được stream' : 'Lỗi phát stream');
-          hls.destroy();
+        const reader = response.body.getReader();
+        let buffer = new Uint8Array(0);
+
+        // JPEG markers
+        const SOI_0 = 0xff;
+        const SOI_1 = 0xd8;
+        const EOI_0 = 0xff;
+        const EOI_1 = 0xd9;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          // Append chunk to buffer
+          const newBuf = new Uint8Array(buffer.length + value.length);
+          newBuf.set(buffer);
+          newBuf.set(value, buffer.length);
+          buffer = newBuf;
+
+          // Find JPEG SOI and EOI within the buffer
+          let soiIdx = -1;
+          let eoiIdx = -1;
+
+          for (let i = 0; i < buffer.length - 1; i++) {
+            if (soiIdx === -1 && buffer[i] === SOI_0 && buffer[i + 1] === SOI_1) {
+              soiIdx = i;
+            }
+            if (soiIdx !== -1 && buffer[i] === EOI_0 && buffer[i + 1] === EOI_1) {
+              eoiIdx = i + 2;
+              break;
+            }
+          }
+
+          if (soiIdx >= 0 && eoiIdx > soiIdx) {
+            const jpegSlice = buffer.slice(soiIdx, eoiIdx);
+            buffer = buffer.slice(eoiIdx); // keep remaining data
+
+            const blob = new Blob([jpegSlice], { type: 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+
+            if (imgRef.current) {
+              imgRef.current.src = url;
+            }
+
+            // Revoke previous blob URL to free memory
+            if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+            currentBlobUrl = url;
+          }
+
+          // Prevent unbounded buffer growth (> 2MB = something is wrong)
+          if (buffer.length > 2 * 1024 * 1024) {
+            buffer = new Uint8Array(0);
+          }
         }
-      });
 
-      hlsRef.current = hls;
-      return () => {
-        hls.destroy();
-        hlsRef.current = null;
-      };
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = playlistUrl;
-      setStreamLoading(false);
-      return () => {
-        video.src = '';
-      };
-    } else {
-      setStreamLoading(false);
-      setStreamError('Trình duyệt không hỗ trợ HLS');
-    }
+        // Stream ended normally
+        setStreamError('Stream đã kết thúc');
+      } catch (err: any) {
+        if (err.name === 'AbortError') return; // Normal cleanup
+        setStreamLoading(false);
+        setStreamError('Lỗi kết nối stream');
+      }
+    };
+
+    startStream();
+
+    return () => {
+      controller.abort();
+      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+    };
   }, [camera.id, token]);
 
   const showSnapshot = streamError && latestEvent?.snapshot_path;
@@ -160,21 +213,20 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
               overflow: 'hidden',
             }}
           >
-            {/* HLS Video */}
+            {/* MJPEG live frame via blob URL — updated by fetch loop above */}
             {!streamError && (
               <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  muted
-                  playsInline
+                <img
+                  ref={imgRef}
+                  alt="Live stream"
                   style={{
                     width: '100%',
                     maxHeight: 500,
                     display: streamLoading ? 'none' : 'block',
+                    objectFit: 'contain',
                   }}
                 />
-                {/* Canvas overlay cho detection */}
+                {/* Canvas overlay for detection bounding boxes */}
                 <canvas
                   ref={canvasRef}
                   style={{
@@ -189,7 +241,7 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
               </>
             )}
 
-            {/* Snapshot fallback */}
+            {/* Snapshot fallback when stream fails but we have a recent snapshot */}
             {showSnapshot && latestEvent?.snapshot_path && (
               <img
                 src={`/api/snapshots/${latestEvent.snapshot_path}`}
@@ -198,7 +250,7 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
               />
             )}
 
-            {/* Loading */}
+            {/* Loading indicator */}
             {streamLoading && !streamError && (
               <div
                 style={{
@@ -216,7 +268,7 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
               </div>
             )}
 
-            {/* Error placeholder */}
+            {/* Error state */}
             {showPlaceholder && (
               <div
                 style={{

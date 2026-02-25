@@ -8,6 +8,8 @@ use axum::{
 };
 use uuid::Uuid;
 
+use serde::Serialize;
+
 use crate::{
     auth::AuthUser,
     db::EventStats,
@@ -20,19 +22,39 @@ use crate::{
 pub fn routes() -> Router {
     Router::new()
         .route("/", get(list_events))
+        .route("/count", get(count_events))
         .route("/stats", get(event_stats))
         .route("/:id", get(get_event))
         .route("/:id/acknowledge", post(acknowledge_event))
 }
 
-/// List events with filters
+#[derive(Serialize)]
+struct EventsPage {
+    data: Vec<Event>,
+    total: i64,
+}
+
+/// List events with filters — returns data + total count for pagination
 async fn list_events(
     Extension(state): Extension<Arc<AppState>>,
     Query(filter): Query<EventFilter>,
     _user: AuthUser,
-) -> Result<Json<Vec<Event>>, ApiError> {
-    let events = state.db.list_events(&filter).await?;
-    Ok(Json(events))
+) -> Result<Json<EventsPage>, ApiError> {
+    let (data, total) = tokio::try_join!(
+        state.db.list_events(&filter),
+        state.db.count_events(&filter),
+    )?;
+    Ok(Json(EventsPage { data, total }))
+}
+
+/// Count events matching a filter (lightweight query for pagination)
+async fn count_events(
+    Extension(state): Extension<Arc<AppState>>,
+    Query(filter): Query<EventFilter>,
+    _user: AuthUser,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let total = state.db.count_events(&filter).await?;
+    Ok(Json(serde_json::json!({ "total": total })))
 }
 
 /// Get event by ID

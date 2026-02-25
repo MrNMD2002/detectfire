@@ -2,6 +2,7 @@
 //!
 //! Samples frames at a configurable rate to reduce processing load.
 
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 /// Frame sampler that ensures consistent frame rate
@@ -113,8 +114,8 @@ pub struct AdaptiveFrameSampler {
     min_fps: f32,
     max_fps: f32,
     
-    /// Processing time history
-    processing_times: Vec<Duration>,
+    /// Processing time history (VecDeque for O(1) pop_front)
+    processing_times: VecDeque<Duration>,
     
     /// Max processing times to track
     history_size: usize,
@@ -132,7 +133,7 @@ impl AdaptiveFrameSampler {
             sampler: FrameSampler::new(initial_fps),
             min_fps: min_fps as f32,
             max_fps: max_fps as f32,
-            processing_times: Vec::with_capacity(50),
+            processing_times: VecDeque::with_capacity(50),
             history_size: 50,
             target_latency: Duration::from_millis(target_latency_ms),
         }
@@ -145,11 +146,11 @@ impl AdaptiveFrameSampler {
     
     /// Record processing time for adaptation
     pub fn record_processing_time(&mut self, duration: Duration) {
-        self.processing_times.push(duration);
+        self.processing_times.push_back(duration);
         
-        // Trim old entries
+        // Trim old entries — O(1) with VecDeque instead of O(n) Vec::remove(0)
         if self.processing_times.len() > self.history_size {
-            self.processing_times.remove(0);
+            self.processing_times.pop_front();
         }
         
         // Adapt FPS based on average processing time

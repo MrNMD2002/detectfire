@@ -50,9 +50,10 @@ export const camerasApi = {
 };
 
 export const eventsApi = {
+  /** Returns { data: Event[], total: number } */
   list: async (params?: any) => {
     const response = await api.get('/events', { params });
-    return response.data;
+    return response.data as { data: any[]; total: number };
   },
   get: async (id: string) => {
     const response = await api.get(`/events/${id}`);
@@ -79,6 +80,17 @@ export const authApi = {
   },
   refresh: async () => {
     const response = await api.post('/auth/refresh');
+    return response.data;
+  },
+};
+
+export const settingsApi = {
+  getTelegram: async () => {
+    const response = await api.get('/settings/telegram');
+    return response.data;
+  },
+  testTelegram: async () => {
+    const response = await api.post('/settings/telegram/test');
     return response.data;
   },
 };

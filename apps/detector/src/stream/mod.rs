@@ -1,6 +1,7 @@
-//! HLS stream module
+//! MJPEG stream module (MBFS-Stream approach)
 //!
-//! On-demand HLS streaming for web viewing. Streams only start when a client connects.
+//! Live MJPEG streaming — subscribes to the inference pipeline broadcast channel
+//! and encodes frames as JPEG on demand. No separate RTSP connection needed.
 
 mod server;
 

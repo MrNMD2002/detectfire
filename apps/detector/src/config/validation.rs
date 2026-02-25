@@ -263,6 +263,7 @@ mod tests {
             fire_hits: 3,
             smoke_hits: 4,
             cooldown_sec: 60,
+            codec: "h264".to_string(),
         }
     }
 

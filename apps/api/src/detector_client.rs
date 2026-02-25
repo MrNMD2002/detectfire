@@ -305,15 +305,43 @@ async fn convert_proto_event(
         }
     };
 
+    let timestamp = DateTime::from_timestamp_millis(proto_event.timestamp)
+        .unwrap_or_else(Utc::now);
+
+    // Save snapshot bytes to disk if present
+    let snapshot_path = if !proto_event.snapshot.is_empty() {
+        let base = &state.config.storage.snapshot_path;
+        let cam_dir = std::path::Path::new(base).join(&proto_event.camera_id);
+        if let Err(e) = tokio::fs::create_dir_all(&cam_dir).await {
+            warn!(error = %e, "Failed to create snapshot dir");
+            None
+        } else {
+            let filename = format!("{}_{}.jpg", proto_event.camera_id, timestamp.timestamp_millis());
+            let filepath = cam_dir.join(&filename);
+            match tokio::fs::write(&filepath, &proto_event.snapshot).await {
+                Ok(_) => {
+                    let rel_path = format!("{}/{}", proto_event.camera_id, filename);
+                    info!(path = %rel_path, "Snapshot saved");
+                    Some(rel_path)
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to write snapshot");
+                    None
+                }
+            }
+        }
+    } else {
+        None
+    };
+
     Ok(CreateEventInput {
         event_type: event_type.to_string(),
         camera_id: camera_uuid,
         site_id: proto_event.site_id.clone(),
-        timestamp: DateTime::from_timestamp_millis(proto_event.timestamp)
-            .unwrap_or_else(Utc::now),
+        timestamp,
         confidence: proto_event.confidence,
         detections: detections_json,
-        snapshot_path: None, // Will be set if snapshot is saved to disk
+        snapshot_path,
         metadata: metadata_json,
     })
 }

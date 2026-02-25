@@ -10,9 +10,11 @@ interface CameraFormData {
   rtsp_url: string;
   description: string;
   detector_camera_id: string;
+  codec: string;
   fps_sample: number;
   conf_fire: number;
   conf_smoke: number;
+  conf_other: number;
 }
 
 export default function CamerasPage() {
@@ -26,12 +28,21 @@ export default function CamerasPage() {
     rtsp_url: '',
     description: '',
     detector_camera_id: 'cam-01',
+    codec: 'h264',
     fps_sample: 3,
     conf_fire: 0.5,
     conf_smoke: 0.4,
+    conf_other: 0.4,
   });
   const [editingCamera, setEditingCamera] = useState<any>(null);
-  const [editDetectorId, setEditDetectorId] = useState('');
+  const [editData, setEditData] = useState<{
+    detector_camera_id: string;
+    codec: string;
+    fps_sample: number;
+    conf_fire: number;
+    conf_smoke: number;
+    conf_other: number;
+  }>({ detector_camera_id: '', codec: 'h264', fps_sample: 3, conf_fire: 0.5, conf_smoke: 0.4, conf_other: 0.4 });
 
   const { data: cameras, isLoading } = useQuery({
     queryKey: ['cameras'],
@@ -44,9 +55,7 @@ export default function CamerasPage() {
     queryFn: async () => {
       if (!selectedCamera) return [];
       try {
-        const events = await eventsApi.list({ limit: 10 });
-        // Filter by camera_id on client side since API might not support it
-        return events.filter((e: any) => e.camera_id === selectedCamera.id);
+        return await eventsApi.list({ limit: 5, camera_id: selectedCamera.id });
       } catch {
         return [];
       }
@@ -55,7 +64,8 @@ export default function CamerasPage() {
     refetchInterval: 3000, // Refresh every 3 seconds
   });
   
-  const latestEvent = latestEvents && latestEvents.length > 0 ? latestEvents[0] : null;
+  const latestEventsArr = Array.isArray(latestEvents) ? latestEvents : (latestEvents as any)?.data ?? [];
+  const latestEvent = latestEventsArr.length > 0 ? latestEventsArr[0] : null;
 
   const addCameraMutation = useMutation({
     mutationFn: (data: CameraFormData) => camerasApi.create(data),
@@ -68,15 +78,17 @@ export default function CamerasPage() {
         rtsp_url: '',
         description: '',
         detector_camera_id: 'cam-01',
+        codec: 'h264',
         fps_sample: 3,
         conf_fire: 0.5,
         conf_smoke: 0.4,
+        conf_other: 0.4,
       });
     },
   });
 
   const updateCameraMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { detector_camera_id?: string } }) =>
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
       camerasApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cameras'] });
@@ -161,12 +173,22 @@ export default function CamerasPage() {
                   >
                     <Video size={14} />
                   </button>
-                  <button 
-                    className="btn btn-sm btn-secondary" 
-                    onClick={() => { setEditingCamera(camera); setEditDetectorId(camera.detector_camera_id || 'cam-01'); }}
-                    title="Sửa Detector Camera ID"
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    onClick={() => {
+                      setEditingCamera(camera);
+                      setEditData({
+                        detector_camera_id: camera.detector_camera_id || 'cam-01',
+                        codec: camera.codec || 'h264',
+                        fps_sample: camera.fps_sample ?? 3,
+                        conf_fire: camera.conf_fire ?? 0.5,
+                        conf_smoke: camera.conf_smoke ?? 0.4,
+                        conf_other: camera.conf_other ?? 0.4,
+                      });
+                    }}
+                    title="Sửa cài đặt camera"
                   >
-                    Sửa ID
+                    Sửa
                   </button>
                   <button 
                     className="btn btn-sm btn-secondary" 
@@ -253,7 +275,22 @@ export default function CamerasPage() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Codec Video</label>
+                  <select
+                    className="form-input"
+                    value={formData.codec}
+                    onChange={(e) => setFormData({ ...formData, codec: e.target.value })}
+                  >
+                    <option value="h264">H.264 (phổ biến)</option>
+                    <option value="h265">H.265 / HEVC (chất lượng cao hơn)</option>
+                  </select>
+                  <small style={{ color: 'var(--text-muted)' }}>
+                    Chọn đúng codec camera đang dùng để stream hoạt động
+                  </small>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
                   <div className="form-group">
                     <label className="form-label">FPS Sample</label>
                     <input
@@ -270,7 +307,7 @@ export default function CamerasPage() {
                     <input
                       className="form-input"
                       type="number"
-                      step="0.1"
+                      step="0.05"
                       min="0"
                       max="1"
                       value={formData.conf_fire}
@@ -282,12 +319,25 @@ export default function CamerasPage() {
                     <input
                       className="form-input"
                       type="number"
-                      step="0.1"
+                      step="0.05"
                       min="0"
                       max="1"
                       value={formData.conf_smoke}
                       onChange={(e) => setFormData({ ...formData, conf_smoke: parseFloat(e.target.value) })}
                     />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Conf Other</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      max="1"
+                      value={formData.conf_other}
+                      onChange={(e) => setFormData({ ...formData, conf_other: parseFloat(e.target.value) })}
+                    />
+                    <small style={{ color: 'var(--text-muted)' }}>Class 2</small>
                   </div>
                 </div>
               </div>
@@ -309,28 +359,86 @@ export default function CamerasPage() {
         </div>
       )}
 
-      {/* Edit Detector Camera ID Modal */}
+      {/* Edit Camera Settings Modal */}
       {editingCamera && (
         <div className="modal-overlay" onClick={() => setEditingCamera(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Sửa Detector Camera ID — {editingCamera.name}</h2>
+              <h2>Sửa cài đặt — {editingCamera.name}</h2>
               <button className="btn btn-icon" onClick={() => setEditingCamera(null)}>
                 <X size={20} />
               </button>
             </div>
             <div className="modal-body">
-              <p className="text-muted" style={{ marginBottom: 12 }}>
-                Khớp với <code>camera_id</code> trong <code>configs/cameras.yaml</code> để stream hoạt động (VD: cam-01).
-              </p>
               <div className="form-group">
                 <label className="form-label">Detector Camera ID</label>
                 <input
                   className="form-input"
-                  value={editDetectorId}
-                  onChange={(e) => setEditDetectorId(e.target.value)}
+                  value={editData.detector_camera_id}
+                  onChange={(e) => setEditData({ ...editData, detector_camera_id: e.target.value })}
                   placeholder="cam-01"
                 />
+                <small style={{ color: 'var(--text-muted)' }}>Khớp với camera_id trong configs/cameras.yaml</small>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Codec Video</label>
+                <select
+                  className="form-input"
+                  value={editData.codec}
+                  onChange={(e) => setEditData({ ...editData, codec: e.target.value })}
+                >
+                  <option value="h264">H.264</option>
+                  <option value="h265">H.265 / HEVC</option>
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">FPS Sample</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={editData.fps_sample}
+                    onChange={(e) => setEditData({ ...editData, fps_sample: parseInt(e.target.value) || 3 })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Conf Fire</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    max="1"
+                    value={editData.conf_fire}
+                    onChange={(e) => setEditData({ ...editData, conf_fire: parseFloat(e.target.value) || 0.5 })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Conf Smoke</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    max="1"
+                    value={editData.conf_smoke}
+                    onChange={(e) => setEditData({ ...editData, conf_smoke: parseFloat(e.target.value) || 0.4 })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Conf Other</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    max="1"
+                    value={editData.conf_other}
+                    onChange={(e) => setEditData({ ...editData, conf_other: parseFloat(e.target.value) || 0.4 })}
+                  />
+                </div>
               </div>
             </div>
             <div className="modal-footer">
@@ -341,7 +449,7 @@ export default function CamerasPage() {
                 type="button"
                 className="btn btn-primary"
                 disabled={updateCameraMutation.isPending}
-                onClick={() => updateCameraMutation.mutate({ id: editingCamera.id, data: { detector_camera_id: editDetectorId || undefined } })}
+                onClick={() => updateCameraMutation.mutate({ id: editingCamera.id, data: editData })}
               >
                 {updateCameraMutation.isPending ? 'Đang lưu...' : 'Lưu'}
               </button>

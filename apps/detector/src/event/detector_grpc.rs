@@ -103,13 +103,35 @@ impl DetectorService for DetectorGrpcService {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ReloadResponse>, Status> {
-        // Config reload would require restarting camera workers
-        // For now, return not implemented
-        Ok(Response::new(ReloadResponse {
-            success: false,
-            message: "Hot reload not implemented yet".to_string(),
-            cameras_loaded: 0,
-        }))
+        use crate::config::AppConfig;
+
+        info!("Received reload_config request");
+
+        match AppConfig::load() {
+            Ok(new_config) => {
+                let cameras_loaded = new_config.cameras.len() as i32;
+                self.state
+                    .camera_manager
+                    .reload_cameras(new_config.cameras)
+                    .await;
+
+                info!(cameras_loaded, "Configuration reloaded successfully");
+
+                Ok(Response::new(ReloadResponse {
+                    success: true,
+                    message: format!("Reloaded {} cameras", cameras_loaded),
+                    cameras_loaded,
+                }))
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to reload configuration");
+                Ok(Response::new(ReloadResponse {
+                    success: false,
+                    message: format!("Failed to load config: {}", e),
+                    cameras_loaded: 0,
+                }))
+            }
+        }
     }
 
     type StreamEventsStream = Pin<Box<dyn Stream<Item = Result<DetectionEvent, Status>> + Send>>;

@@ -11,6 +11,7 @@ use validator::Validate;
 
 use crate::{
     auth::AuthUser,
+    camera_sync,
     detector_client::DetectorClient,
     error::ApiError,
     models::{Camera, CreateCameraInput, UpdateCameraInput},
@@ -188,20 +189,28 @@ async fn get_camera_status(
     }
 }
 
-/// Helper function to notify detector to reload config
+/// Sync cameras to cameras.yaml and tell the detector to reload.
+/// Called after every create/update/delete camera operation.
 async fn notify_detector_reload(state: &AppState) -> anyhow::Result<()> {
+    // Fetch all cameras (with decrypted RTSP URLs) and write cameras.yaml
+    let cameras = state.db.list_cameras().await?;
+    if let Err(e) = camera_sync::write_cameras_yaml(&cameras) {
+        // Not fatal — detector can still use old file; log and continue
+        warn!(error = %e, "Failed to write cameras.yaml; detector reload may use stale config");
+    }
+
     let detector_addr = format!(
         "{}:{}",
         state.config.detector.host,
         state.config.detector.grpc_port
     );
-    
+
     let mut client = DetectorClient::connect(&detector_addr).await?;
     let response = client.reload_config().await?;
-    
+
     if !response.success {
         return Err(anyhow::anyhow!("Detector reload failed: {}", response.message));
     }
-    
+
     Ok(())
 }

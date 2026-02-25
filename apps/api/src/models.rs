@@ -18,10 +18,12 @@ pub struct Camera {
     #[serde(skip_serializing)]
     pub rtsp_url: String,
     pub enabled: bool,
+    pub codec: String,
     pub fps_sample: u32,
     pub imgsz: u32,
     pub conf_fire: f32,
     pub conf_smoke: f32,
+    pub conf_other: f32,
     pub window_size: u32,
     pub fire_hits: u32,
     pub smoke_hits: u32,
@@ -49,19 +51,24 @@ pub struct CreateCameraInput {
     pub rtsp_url: String,
     
     pub enabled: Option<bool>,
-    
+
+    pub codec: Option<String>,
+
     #[validate(range(min = 1, max = 30))]
     pub fps_sample: Option<u32>,
-    
+
     #[validate(range(min = 320, max = 1280))]
     pub imgsz: Option<u32>,
-    
+
     #[validate(range(min = 0.1, max = 1.0))]
     pub conf_fire: Option<f32>,
-    
+
     #[validate(range(min = 0.1, max = 1.0))]
     pub conf_smoke: Option<f32>,
-    
+
+    #[validate(range(min = 0.1, max = 1.0))]
+    pub conf_other: Option<f32>,
+
     #[validate(range(min = 1, max = 100))]
     pub window_size: Option<u32>,
     
@@ -94,6 +101,8 @@ pub struct UpdateCameraInput {
 
     pub enabled: Option<bool>,
 
+    pub codec: Option<String>,
+
     #[validate(range(min = 1, max = 30))]
     pub fps_sample: Option<u32>,
 
@@ -105,6 +114,9 @@ pub struct UpdateCameraInput {
 
     #[validate(range(min = 0.1, max = 1.0))]
     pub conf_smoke: Option<f32>,
+
+    #[validate(range(min = 0.1, max = 1.0))]
+    pub conf_other: Option<f32>,
 
     #[validate(range(min = 1, max = 100))]
     pub window_size: Option<u32>,
@@ -125,6 +137,9 @@ pub struct Event {
     pub id: Uuid,
     pub event_type: String,
     pub camera_id: Uuid,
+    /// Denormalized camera name (from LEFT JOIN cameras) — None when created internally
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub camera_name: Option<String>,
     pub site_id: String,
     pub timestamp: DateTime<Utc>,
     pub confidence: f32,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 
 interface WebSocketMessage {
@@ -16,36 +16,31 @@ interface UseWebSocketOptions {
   onOpen?: () => void;
   onClose?: () => void;
   onError?: (error: Event) => void;
-  reconnectInterval?: number;
-  maxReconnectAttempts?: number;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const {
-    onMessage,
-    onOpen,
-    onClose,
-    onError,
-    reconnectInterval = 5000,
-    maxReconnectAttempts = 10,
-  } = options;
-
+  const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const destroyedRef = useRef(false);
+
+  // Keep callbacks in refs to avoid stale closures in onopen/onclose/onmessage
+  const onMessageRef = useRef(options.onMessage);
+  const onOpenRef = useRef(options.onOpen);
+  const onCloseRef = useRef(options.onClose);
+  const onErrorRef = useRef(options.onError);
+  onMessageRef.current = options.onMessage;
+  onOpenRef.current = options.onOpen;
+  onCloseRef.current = options.onClose;
+  onErrorRef.current = options.onError;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return;
-    }
+    if (destroyedRef.current) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
-    // Attach JWT token as a query parameter.
-    // WebSocket does not support custom request headers from the browser, so
-    // using a query param is the standard approach. The backend should validate
-    // this token before accepting the upgrade.
-    // TODO: once the backend switches to HttpOnly cookie auth this can be removed.
     const token = useAuthStore.getState().token;
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
     const wsUrl = `${protocol}//${window.location.host}/ws/events${tokenParam}`;
@@ -53,15 +48,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onopen = () => {
+      if (destroyedRef.current) { wsRef.current?.close(); return; }
       console.log('WebSocket connected');
       reconnectAttemptsRef.current = 0;
-      onOpen?.();
+      setIsConnected(true);
+      onOpenRef.current?.();
     };
 
     wsRef.current.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data) as WebSocketMessage;
-        onMessage?.(message);
+        onMessageRef.current?.(message);
       } catch (e) {
         console.error('Failed to parse WebSocket message:', e);
       }
@@ -69,38 +66,42 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
     wsRef.current.onclose = () => {
       console.log('WebSocket disconnected');
-      onClose?.();
+      setIsConnected(false);
+      onCloseRef.current?.();
 
-      // Attempt reconnection
-      if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          reconnectAttemptsRef.current++;
-          connect();
-        }, reconnectInterval);
+      if (!destroyedRef.current) {
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s
+        const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttemptsRef.current));
+        reconnectAttemptsRef.current++;
+        console.log(`WebSocket reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+        reconnectTimeoutRef.current = window.setTimeout(connect, delay);
       }
     };
 
     wsRef.current.onerror = (error) => {
       console.error('WebSocket error:', error);
-      onError?.(error);
+      onErrorRef.current?.(error);
     };
-  }, [onMessage, onOpen, onClose, onError, reconnectInterval, maxReconnectAttempts]);
+  }, []); // stable — uses refs for all callbacks
 
   const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
+    destroyedRef.current = true;
+    if (reconnectTimeoutRef.current !== null) {
       clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
     wsRef.current?.close();
   }, []);
 
   useEffect(() => {
+    destroyedRef.current = false;
     connect();
-    return () => disconnect();
-  }, [connect, disconnect]);
+    return () => {
+      destroyedRef.current = true;
+      if (reconnectTimeoutRef.current !== null) clearTimeout(reconnectTimeoutRef.current);
+      wsRef.current?.close();
+    };
+  }, []); // run once on mount
 
-  return {
-    connect,
-    disconnect,
-    isConnected: wsRef.current?.readyState === WebSocket.OPEN,
-  };
+  return { connect, disconnect, isConnected };
 }

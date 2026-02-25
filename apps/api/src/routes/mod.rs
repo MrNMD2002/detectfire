@@ -5,6 +5,8 @@ pub mod events;
 pub mod auth;
 pub mod health;
 pub mod stream;
+pub mod snapshots;
+pub mod settings;
 
 use axum::{routing::get, Router};
 
@@ -14,6 +16,8 @@ pub fn api_routes() -> Router {
         .nest("/auth", auth::routes())
         .nest("/cameras", cameras::routes().merge(stream::routes()))
         .nest("/events", events::routes())
+        .nest("/snapshots", snapshots::routes())
+        .nest("/settings", settings::routes())
         .route("/health", get(health::health_check))
 }
 

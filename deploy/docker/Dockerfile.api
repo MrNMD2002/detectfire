@@ -69,8 +69,10 @@ COPY --from=builder /app/target/release/fire-detect-api /usr/local/bin/
 # Copy migrations
 COPY apps/api/migrations /app/migrations
 
-# Create non-root user
-RUN useradd -r -u 1000 api
+# Create non-root user and prepare writable directories
+RUN useradd -r -u 1000 api && \
+    mkdir -p /app/snapshots && \
+    chmod 777 /app/snapshots
 USER api
 
 # Environment

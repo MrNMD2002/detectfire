@@ -67,10 +67,15 @@ pub struct CameraConfig {
     /// Cooldown between alerts (seconds)
     #[serde(default = "default_cooldown_sec")]
     pub cooldown_sec: u64,
+
+    /// Video codec: "h264" or "h265" (default: "h264")
+    #[serde(default = "default_codec")]
+    pub codec: String,
 }
 
 // Default value functions
 fn default_enabled() -> bool { true }
+fn default_codec() -> String { "h264".to_string() }
 fn default_fps_sample() -> u32 { 3 }
 fn default_imgsz() -> u32 { 640 }
 fn default_conf_fire() -> f32 { 0.5 }

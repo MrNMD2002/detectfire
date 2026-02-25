@@ -1,6 +1,7 @@
 # Detector Service - GPU (CUDA)
-# ort crate tự download ONNX Runtime 1.23.2 (matching version) qua feature download-binaries.
-# Không cần cài thủ công ONNX Runtime → tránh lỗi version mismatch / linker.
+# Build stage: Ubuntu 22.04 + CUDA 12.2 devel
+# Runtime stage: Ubuntu 24.04 + CUDA 12.6 (glibc 2.39 supports ORT 1.20+ prebuilt libs)
+# Binary compiled with load-dynamic (avoids static ORT link/glibc mismatch)
 
 # ========== Stage 1: Build ==========
 FROM nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04 AS builder
@@ -31,14 +32,11 @@ RUN apt-get update && apt-get install -y \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# KHÔNG cài ONNX Runtime thủ công.
-# ort crate (download-binaries feature) tự download đúng bản ONNX Runtime 1.23.2.
-
 # Copy manifest
 COPY apps/detector/Cargo.toml ./
 COPY apps/detector/Cargo.lock ./
 
-# Dummy build để cache dependencies
+# Dummy build để cache dependencies (download ORT + compile deps)
 RUN mkdir -p src proto \
     && echo "fn main() {}" > src/main.rs \
     && echo "fn main() {}" > build.rs
@@ -50,26 +48,35 @@ COPY apps/detector/build.rs ./
 COPY apps/detector/proto ./proto
 COPY apps/detector/src ./src
 
-# Xóa fingerprint cũ để force rebuild binary
+# Xóa fingerprint cũ + binary cũ để force rebuild hoàn toàn
 RUN rm -rf target/release/build/fire-detect-detector-* \
-    target/release/.fingerprint/fire-detect-detector-* 2>/dev/null || true
+    target/release/.fingerprint/fire-detect-detector-* \
+    target/release/fire-detector \
+    target/release/deps/fire_detect* \
+    2>/dev/null || true
 
-# Build binary thật
-RUN cargo build --release 2>&1 | tee /tmp/build.log \
+# Build binary thật (features: gpu = cuda + load-dynamic + download-binaries)
+# load-dynamic tránh static link ORT → không bị lỗi glibc symbol
+# Dùng bash + pipefail để cargo failure không bị tee che khuất
+RUN /bin/bash -c 'set -euo pipefail; cargo build --release 2>&1 | tee /tmp/build.log' \
     && test -f target/release/fire-detector \
-    && chmod +x target/release/fire-detector
+    && chmod +x target/release/fire-detector \
+    && echo "Binary size: $(wc -c < target/release/fire-detector) bytes"
 
-# Copy ALL ONNX Runtime libs: from target/release and from ort_sys build out dir (core lib may be there)
+# Collect ORT shared libraries từ download cache và build dirs
+# ort crate v2.x stores libs in target/release/build/ort-{hash}/out/
 RUN mkdir -p /ort-libs \
-    && ( find target/release -name "libonnxruntime*.so*" 2>/dev/null | sort -u | while read f; do cp -L "$f" /ort-libs/ 2>/dev/null || true; done ) \
-    && ( for d in target/release/build/ort_sys-*/out target/release/build/ort-sys-*/out; do [ -d "$d" ] && cp -L "$d"/libonnxruntime*.so* /ort-libs/ 2>/dev/null || true; done ) \
-    && ( for d in target/release/build/ort_sys-*/out target/release/build/ort-sys-*/out; do [ -d "$d" ] && cp -L "$d"/*.so* /ort-libs/ 2>/dev/null || true; done ) \
+    && find /root/.cache/ort.pyke.io -name "libonnxruntime*.so*" 2>/dev/null | sort -u | while read f; do cp -Lv "$f" /ort-libs/ 2>/dev/null || true; done \
+    && find target/release -name "libonnxruntime*.so*" 2>/dev/null | sort -u | while read f; do cp -Lv "$f" /ort-libs/ 2>/dev/null || true; done \
+    && for d in target/release/build/ort-*/out target/release/build/ort_sys-*/out target/release/build/ort-sys-*/out; do \
+         [ -d "$d" ] && find "$d" -name "*.so*" | while read f; do cp -Lv "$f" /ort-libs/ 2>/dev/null || true; done; \
+       done \
     && ls -lah /ort-libs/ \
-    && test -n "$(ls -A /ort-libs 2>/dev/null)" \
-    && echo "ONNX Runtime libraries collected"
+    && echo "=== ORT libs collected ==="
 
 # ========== Stage 2: Runtime ==========
-FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+# Ubuntu 24.04 có glibc 2.39 → tương thích với ORT prebuilt libs
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
 
 WORKDIR /app
 
@@ -90,9 +97,21 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/target/release/fire-detector /usr/local/bin/fire-detector
 RUN chmod +x /usr/local/bin/fire-detector
 
-# ONNX Runtime shared libraries (downloaded by ort during build)
+# ONNX Runtime shared libraries
+# Try builder cache first; if empty, download GPU (CUDA 12) lib explicitly
 COPY --from=builder /ort-libs/ /usr/local/lib/
-RUN ldconfig
+ARG ORT_VERSION=1.23.2
+RUN if ! ls /usr/local/lib/libonnxruntime.so* 2>/dev/null | grep -q .; then \
+        echo "ORT libs not in builder cache - downloading ORT ${ORT_VERSION} GPU..."; \
+        curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-gpu-cuda12-${ORT_VERSION}.tgz" -o /tmp/ort.tgz 2>/dev/null \
+        || curl -fsSL "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-gpu-${ORT_VERSION}.tgz" -o /tmp/ort.tgz \
+        && mkdir -p /tmp/ort-extract \
+        && tar xz -C /tmp/ort-extract -f /tmp/ort.tgz \
+        && find /tmp/ort-extract -name "libonnxruntime*.so*" -exec cp -Lv {} /usr/local/lib/ \; \
+        && rm -rf /tmp/ort.tgz /tmp/ort-extract; \
+    fi \
+    && ldconfig \
+    && ls -lah /usr/local/lib/libonnx* 2>/dev/null || (echo "FATAL: libonnxruntime.so not found" && exit 1)
 
 ENV LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
 ENV RUST_LOG=info

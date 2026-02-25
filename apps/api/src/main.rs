@@ -15,6 +15,7 @@ mod ws;
 mod error;
 mod models;
 mod detector_client;
+mod camera_sync;
 
 use std::sync::Arc;
 use std::net::SocketAddr;
@@ -107,6 +108,16 @@ async fn main() -> Result<()> {
     
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("API server listening on http://{}", addr);
+
+    // Write initial cameras.yaml from DB so detector sees the same config as the web UI
+    match state.db.list_cameras().await {
+        Ok(cameras) => {
+            if let Err(e) = camera_sync::write_cameras_yaml(&cameras) {
+                tracing::warn!(error = %e, "Failed to write initial cameras.yaml");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "Failed to list cameras for initial sync"),
+    }
 
     // Start event listener from detector (background task)
     let event_state = state.clone();

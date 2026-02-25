@@ -137,7 +137,7 @@ async fn async_main() -> Result<()> {
         }
     });
 
-    // Start HLS stream HTTP server (on-demand, port = grpc_port + 1000)
+    // Start MJPEG stream HTTP server (push model, port = grpc_port + 1000)
     let stream_port = config.global.server.detector.grpc_port + 1000;
     let stream_handle = tokio::spawn({
         let state = app_state.clone();
@@ -148,7 +148,7 @@ async fn async_main() -> Result<()> {
             }
         }
     });
-    info!(port = stream_port, "HLS stream server started");
+    info!(port = stream_port, "MJPEG stream server started");
 
     // Wait for shutdown signal
     info!("Detector service running. Press Ctrl+C to stop.");

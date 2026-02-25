@@ -64,11 +64,16 @@ pub fn preprocess_image(
     let pad_x = (target_size - new_w) / 2;
     let pad_y = (target_size - new_h) / 2;
     
-    // Copy resized image onto letterboxed canvas
-    for y in 0..new_h {
-        for x in 0..new_w {
-            let pixel = resized.get_pixel(x, y);
-            letterboxed.put_pixel(x + pad_x, y + pad_y, *pixel);
+    // Copy resized image onto letterboxed canvas (row-by-row memcpy, cache-friendly)
+    {
+        let src_raw = resized.as_raw();
+        let dst_raw: &mut [u8] = letterboxed.as_mut();
+        let row_bytes = new_w as usize * 3;
+        for y in 0..new_h as usize {
+            let src_start = y * row_bytes;
+            let dst_start = ((y + pad_y as usize) * target_size as usize + pad_x as usize) * 3;
+            dst_raw[dst_start..dst_start + row_bytes]
+                .copy_from_slice(&src_raw[src_start..src_start + row_bytes]);
         }
     }
     
@@ -78,25 +83,31 @@ pub fn preprocess_image(
     (tensor, scale)
 }
 
-/// Convert RGB image to normalized NCHW tensor
+/// Convert RGB image to normalized NCHW tensor.
+///
+/// Uses flat-slice indexing instead of ndarray multi-dimensional bounds-checked
+/// access, and a single pass over the HWC source to scatter into CHW planes.
+/// For a 640×640 image this eliminates ~1.2 M per-element bounds checks.
 fn image_to_tensor(img: &RgbImage) -> Array4<f32> {
     let (width, height) = (img.width() as usize, img.height() as usize);
-    
-    // Create array [1, 3, H, W]
+    let raw = img.as_raw(); // &[u8] HWC: [R,G,B, R,G,B, ...]
+    let pixels = width * height;
+
+    // C-order Array4 layout for [1, 3, H, W]:
+    //   data[i]              = tensor[0, 0, i/W, i%W]  (R plane)
+    //   data[pixels + i]     = tensor[0, 1, i/W, i%W]  (G plane)
+    //   data[pixels*2 + i]   = tensor[0, 2, i/W, i%W]  (B plane)
     let mut tensor = Array4::<f32>::zeros((1, 3, height, width));
-    
-    // Fill tensor with normalized pixel values
-    for y in 0..height {
-        for x in 0..width {
-            let pixel = img.get_pixel(x as u32, y as u32);
-            
-            // Normalize to [0, 1]
-            tensor[[0, 0, y, x]] = pixel[0] as f32 / 255.0; // R
-            tensor[[0, 1, y, x]] = pixel[1] as f32 / 255.0; // G
-            tensor[[0, 2, y, x]] = pixel[2] as f32 / 255.0; // B
-        }
+    let data = tensor.as_slice_mut().expect("tensor is contiguous");
+
+    const INV255: f32 = 1.0 / 255.0;
+    for i in 0..pixels {
+        let src = i * 3;
+        data[i]              = raw[src]     as f32 * INV255; // R
+        data[pixels + i]     = raw[src + 1] as f32 * INV255; // G
+        data[pixels * 2 + i] = raw[src + 2] as f32 * INV255; // B
     }
-    
+
     tensor
 }
 
