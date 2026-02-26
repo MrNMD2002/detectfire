@@ -64,6 +64,7 @@ secrets/
 
 # Deploy / Docker temp
 deploy/docker/build_log.txt
+deploy/docker/build_error.txt
 deploy/docker/detector-output.txt
 **/check_log.txt
 
