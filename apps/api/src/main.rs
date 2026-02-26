@@ -77,8 +77,9 @@ async fn main() -> Result<()> {
 
     let db = Database::new(pool, config.database.encryption_key.clone());
 
-    // Initialize Telegram bot
-    let telegram = TelegramBot::new(&config.telegram);
+    // Initialize Telegram bot — override env config with any DB-persisted settings
+    let telegram_config = load_telegram_config_from_db(&db, &config.telegram).await;
+    let telegram = TelegramBot::new(&telegram_config);
 
     // Initialize event broadcaster
     let event_broadcaster = EventBroadcaster::new();
@@ -251,6 +252,52 @@ async fn start_event_listener(state: Arc<AppState>) -> Result<()> {
         // Exponential backoff before retry
         tokio::time::sleep(tokio::time::Duration::from_secs(retry_delay)).await;
         retry_delay = (retry_delay * 2).min(max_retry_delay);
+    }
+}
+
+/// Load Telegram config from DB, falling back to env/YAML values.
+/// Allows runtime updates via the Settings UI to survive API restarts.
+async fn load_telegram_config_from_db(
+    db: &crate::db::Database,
+    base: &crate::config::TelegramConfig,
+) -> crate::config::TelegramConfig {
+    let bot_token = db
+        .get_setting("telegram.bot_token")
+        .await
+        .ok()
+        .flatten()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| base.bot_token.clone());
+
+    let default_chat_id = db
+        .get_setting("telegram.chat_id")
+        .await
+        .ok()
+        .flatten()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| base.default_chat_id.clone());
+
+    let enabled = db
+        .get_setting("telegram.enabled")
+        .await
+        .ok()
+        .flatten()
+        .map(|v| v == "true")
+        .unwrap_or(base.enabled);
+
+    let rate_limit = db
+        .get_setting("telegram.rate_limit")
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(base.rate_limit_per_minute);
+
+    crate::config::TelegramConfig {
+        enabled,
+        bot_token,
+        default_chat_id,
+        rate_limit_per_minute: rate_limit,
     }
 }
 

@@ -91,6 +91,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     procps \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Binary

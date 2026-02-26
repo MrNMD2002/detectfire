@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT \n                id, site_id, name, description, detector_camera_id,\n                rtsp_url_encrypted, enabled, fps_sample, imgsz, conf_fire, conf_smoke,\n                window_size, fire_hits, smoke_hits, cooldown_sec,\n                created_at, updated_at\n            FROM cameras\n            ORDER BY site_id, name\n            ",
+  "query": "\n            SELECT\n                id, site_id, name, description, detector_camera_id,\n                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,\n                conf_fire, conf_smoke, conf_other,\n                window_size, fire_hits, smoke_hits, cooldown_sec,\n                created_at, updated_at\n            FROM cameras\n            WHERE detector_camera_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -40,57 +40,69 @@
       },
       {
         "ordinal": 7,
+        "name": "codec",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
         "name": "fps_sample",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "imgsz",
         "type_info": "Int4"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "conf_fire",
         "type_info": "Float4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "conf_smoke",
         "type_info": "Float4"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
+        "name": "conf_other",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 13,
         "name": "window_size",
         "type_info": "Int4"
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "fire_hits",
         "type_info": "Int4"
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "smoke_hits",
         "type_info": "Int4"
       },
       {
-        "ordinal": 14,
+        "ordinal": 16,
         "name": "cooldown_sec",
         "type_info": "Int4"
       },
       {
-        "ordinal": 15,
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 18,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text"
+      ]
     },
     "nullable": [
       false,
@@ -109,8 +121,10 @@
       false,
       false,
       false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "5c959d3799156d80cc206bd292b6a91ed4c104bf2ba20889767200bab9b839d3"
+  "hash": "4d563fc2e5bb111c913c537595f46410c7e4a66b0c51719fed5230dadc22f993"
 }

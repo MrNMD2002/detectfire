@@ -36,6 +36,7 @@ ndarray = "0.15"
 # Image processing
 image = { version = "0.25", features = ["jpeg", "png"] }
 imageproc = "0.24"
+ab_glyph = "0.2"
 
 # GStreamer for RTSP
 gstreamer = "0.22"

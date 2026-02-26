@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, event_type, camera_id, site_id, timestamp,\n                confidence, detections, snapshot_path, metadata,\n                acknowledged, acknowledged_by, acknowledged_at\n            FROM events\n            WHERE id = $1\n            ",
+  "query": "\n            INSERT INTO events (\n                id, event_type, camera_id, site_id, timestamp,\n                confidence, detections, snapshot_path, metadata\n            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n            RETURNING\n                id, event_type, camera_id, site_id, timestamp,\n                confidence, detections, snapshot_path, metadata,\n                acknowledged, acknowledged_by, acknowledged_at\n            ",
   "describe": {
     "columns": [
       {
@@ -66,7 +66,15 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Varchar",
+        "Uuid",
+        "Varchar",
+        "Timestamptz",
+        "Float4",
+        "Jsonb",
+        "Text",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -84,5 +92,5 @@
       true
     ]
   },
-  "hash": "1b4c9c8b91b8e0870403ae1ace78bd216c74c282d290b66f3f35470cb8f46c2f"
+  "hash": "83840e152a5d34461f20807b6e83709105e03769b2cd27316ed4d2ce48e4417d"
 }

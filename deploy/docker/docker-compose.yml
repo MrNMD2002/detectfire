@@ -61,8 +61,8 @@ services:
     build:
       context: ../../
       dockerfile: deploy/docker/Dockerfile.api
-      args:
-        DATABASE_URL: postgres://${DB_USER:-fire_detect}:${DB_PASSWORD:-devpassword}@host.docker.internal:${DB_PORT:-5432}/${DB_NAME:-fire_detect}
+      # No DATABASE_URL build arg needed: SQLx offline mode (.sqlx/ cache) used at build time.
+      # Migrations run at container startup via sqlx::migrate!() in main.rs.
     container_name: fire-detect-api
     restart: unless-stopped
     environment:

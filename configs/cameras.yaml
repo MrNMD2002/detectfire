@@ -1,15 +1,15 @@
 cameras:
-- camera_id: cam công ty
-  site_id: site-main
-  name: Camera chính - 10.1.1.174
-  description: Camera HIKVISION H.265 - kho hang chinh
+- camera_id: cam-02
+  site_id: 'site ID '
+  name: 'camera công ty '
+  description: 'Team AI '
   rtsp_url: rtsp://root:Admin!123@10.1.1.174:554/cam/realmonitor?channel=1&subtype=0
   enabled: true
   codec: h265
-  fps_sample: 3
+  fps_sample: 6
   imgsz: 640
-  conf_fire: 0.5
-  conf_smoke: 0.4
+  conf_fire: 0.7
+  conf_smoke: 0.7
   conf_other: 0.4
   window_size: 10
   fire_hits: 3

@@ -24,10 +24,10 @@ use axum::{
     Router,
 };
 use bytes::Bytes;
-use image::ImageFormat;
+use image::codecs::jpeg::JpegEncoder;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt as _;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::camera::Frame;
 use crate::AppState;
@@ -80,20 +80,24 @@ async fn serve_mjpeg(state: Arc<AppState>, camera_id: String) -> Response {
     // Lagged frames (Err) are filtered out; stream ends when sender is dropped.
     let stream = BroadcastStream::new(rx).filter_map(move |result| {
         let cam = camera_id.clone();
-        let frame = result.ok()?; // Lagged/closed → None, skips stale frames
+        let frame = match result {
+            Ok(f) => f,
+            Err(_lagged) => return None, // Lagged/closed → skip stale frames silently
+        };
         match encode_jpeg_frame(&frame) {
             Ok(jpeg) => {
                 // MJPEG boundary format (RFC 2046 multipart)
+                // Pre-allocate exact size: header + jpeg + trailing CRLF
                 let part_header = format!(
                     "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
                     jpeg.len()
                 );
-                let mut buf = Vec::with_capacity(part_header.len() + jpeg.len() + 2);
+                let total = part_header.len() + jpeg.len() + 2;
+                let mut buf = Vec::with_capacity(total);
                 buf.extend_from_slice(part_header.as_bytes());
                 buf.extend_from_slice(&jpeg);
                 buf.extend_from_slice(b"\r\n");
 
-                debug!(camera_id = %cam, bytes = buf.len(), "MJPEG frame sent");
                 Some(Ok::<Bytes, std::io::Error>(Bytes::from(buf)))
             }
             Err(e) => {
@@ -117,13 +121,31 @@ async fn serve_mjpeg(state: Arc<AppState>, camera_id: String) -> Response {
         .into_response()
 }
 
-/// Encode an RGB Frame as JPEG bytes (quality 80)
-fn encode_jpeg_frame(frame: &Frame) -> anyhow::Result<Vec<u8>> {
-    let img = frame.to_image()
-        .ok_or_else(|| anyhow::anyhow!("Invalid frame dimensions {}x{}", frame.width, frame.height))?;
+/// JPEG quality for MJPEG stream (75 = good quality/size tradeoff, ~2-5ms encode time)
+const MJPEG_JPEG_QUALITY: u8 = 75;
 
-    let mut buf = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut buf), ImageFormat::Jpeg)?;
+/// Encode an RGB Frame as JPEG bytes.
+///
+/// Encodes directly from the raw Arc<Vec<u8>> pixel buffer — avoids the extra
+/// Vec<u8> clone that image::RgbImage::from_raw() would require. Pre-sizes the
+/// output buffer to ~25% of raw size (typical JPEG compression ratio for camera feeds).
+fn encode_jpeg_frame(frame: &Frame) -> anyhow::Result<Vec<u8>> {
+    if !frame.is_valid() {
+        anyhow::bail!("Invalid frame {}x{} (data={})", frame.width, frame.height, frame.data.len());
+    }
+
+    // Pre-allocate ~25% of raw RGB size as a typical JPEG size estimate
+    let capacity = (frame.width as usize * frame.height as usize * 3) / 4;
+    let mut buf = Vec::with_capacity(capacity);
+
+    let mut encoder = JpegEncoder::new_with_quality(&mut buf, MJPEG_JPEG_QUALITY);
+    encoder.encode(
+        &frame.data,
+        frame.width,
+        frame.height,
+        image::ExtendedColorType::Rgb8,
+    )?;
+
     Ok(buf)
 }
 

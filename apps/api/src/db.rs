@@ -609,3 +609,30 @@ struct CameraRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
+
+// ── System settings (key/value) ───────────────────────────────────────────────
+
+impl Database {
+    /// Get a system setting value by key.
+    /// Uses a runtime query (not sqlx::query! macro) — no .sqlx cache update needed.
+    pub async fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let row = sqlx::query("SELECT value FROM system_settings WHERE key = $1")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|r| r.get::<String, _>("value")))
+    }
+
+    /// Upsert a system setting value.
+    pub async fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO system_settings (key, value) VALUES ($1, $2) \
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+}

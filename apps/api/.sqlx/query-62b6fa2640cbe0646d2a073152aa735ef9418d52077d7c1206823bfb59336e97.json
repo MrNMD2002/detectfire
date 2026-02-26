@@ -1,0 +1,146 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cameras SET\n                site_id = COALESCE($2, site_id),\n                name = COALESCE($3, name),\n                description = COALESCE($4, description),\n                detector_camera_id = COALESCE($5, detector_camera_id),\n                rtsp_url_encrypted = $6,\n                enabled = COALESCE($7, enabled),\n                codec = COALESCE($8, codec),\n                fps_sample = COALESCE($9, fps_sample),\n                imgsz = COALESCE($10, imgsz),\n                conf_fire = COALESCE($11, conf_fire),\n                conf_smoke = COALESCE($12, conf_smoke),\n                conf_other = COALESCE($13, conf_other),\n                window_size = COALESCE($14, window_size),\n                fire_hits = COALESCE($15, fire_hits),\n                smoke_hits = COALESCE($16, smoke_hits),\n                cooldown_sec = COALESCE($17, cooldown_sec),\n                updated_at = NOW()\n            WHERE id = $1\n            RETURNING\n                id, site_id, name, description, detector_camera_id,\n                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,\n                conf_fire, conf_smoke, conf_other,\n                window_size, fire_hits, smoke_hits, cooldown_sec,\n                created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "detector_camera_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "rtsp_url_encrypted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "codec",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "fps_sample",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "imgsz",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "conf_fire",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 11,
+        "name": "conf_smoke",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 12,
+        "name": "conf_other",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 13,
+        "name": "window_size",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "fire_hits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "smoke_hits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "cooldown_sec",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 17,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Text",
+        "Bool",
+        "Varchar",
+        "Int4",
+        "Int4",
+        "Float4",
+        "Float4",
+        "Float4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "62b6fa2640cbe0646d2a073152aa735ef9418d52077d7c1206823bfb59336e97"
+}

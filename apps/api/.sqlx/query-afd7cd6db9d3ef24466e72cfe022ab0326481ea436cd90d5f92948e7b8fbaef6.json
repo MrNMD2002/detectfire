@@ -1,0 +1,128 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, site_id, name, description, detector_camera_id,\n                rtsp_url_encrypted, enabled, codec, fps_sample, imgsz,\n                conf_fire, conf_smoke, conf_other,\n                window_size, fire_hits, smoke_hits, cooldown_sec,\n                created_at, updated_at\n            FROM cameras\n            ORDER BY site_id, name\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "site_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "detector_camera_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "rtsp_url_encrypted",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "codec",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "fps_sample",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "imgsz",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "conf_fire",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 11,
+        "name": "conf_smoke",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 12,
+        "name": "conf_other",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 13,
+        "name": "window_size",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "fire_hits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "smoke_hits",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "cooldown_sec",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 17,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "afd7cd6db9d3ef24466e72cfe022ab0326481ea436cd90d5f92948e7b8fbaef6"
+}

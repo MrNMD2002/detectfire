@@ -89,6 +89,15 @@ export const settingsApi = {
     const response = await api.get('/settings/telegram');
     return response.data;
   },
+  updateTelegram: async (data: {
+    bot_token?: string;
+    default_chat_id: string;
+    enabled: boolean;
+    rate_limit_per_minute?: number;
+  }) => {
+    const response = await api.put('/settings/telegram', data);
+    return response.data;
+  },
   testTelegram: async () => {
     const response = await api.post('/settings/telegram/test');
     return response.data;
