@@ -21,12 +21,43 @@ export default function EventsPage() {
     }),
   });
 
+  const [ackError, setAckError] = useState<string | null>(null);
+
   const acknowledgeMutation = useMutation({
     mutationFn: (id: string) => eventsApi.acknowledge(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['events'] }),
+    onMutate: async (id) => {
+      setAckError(null);
+      // Cancel in-flight refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ['events'] });
+      // Snapshot all events cache entries for rollback
+      const previousData = queryClient.getQueriesData<{ data: any[]; total: number }>({ queryKey: ['events'] });
+      // Optimistically mark the event as acknowledged in every cached page
+      queryClient.setQueriesData<{ data: any[]; total: number }>(
+        { queryKey: ['events'] },
+        (old) => {
+          if (!old?.data) return old;
+          return { ...old, data: old.data.map((e) => e.id === id ? { ...e, acknowledged: true } : e) };
+        }
+      );
+      return { previousData };
+    },
+    onError: (_err, _id, context: any) => {
+      // Roll back to pre-mutation state
+      context?.previousData?.forEach(([key, data]: [readonly unknown[], unknown]) => {
+        queryClient.setQueryData(key as any, data);
+      });
+      setAckError('Xác nhận thất bại. Vui lòng thử lại.');
+    },
+    onSettled: () => {
+      // Always sync with server after mutation (success or error)
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
   });
 
-  const eventsData: any[] = eventsPage?.data || [];
+  // Only show fire/smoke events — stream_up/stream_down are internal status events
+  const eventsData: any[] = (eventsPage?.data || []).filter(
+    (e: any) => e.event_type === 'fire' || e.event_type === 'smoke'
+  );
   const total: number = eventsPage?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -89,6 +120,11 @@ export default function EventsPage() {
           </div>
         ) : (
           <>
+            {ackError && (
+              <div style={{ background: 'var(--color-danger, #e53e3e)', color: '#fff', padding: '8px 16px', borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
+                {ackError}
+              </div>
+            )}
             <div className="events-timeline">
               {eventsData.map((event: any) => (
                 <div key={event.id} className={`event-item ${event.event_type}`}>

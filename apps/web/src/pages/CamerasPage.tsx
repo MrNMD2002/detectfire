@@ -3,6 +3,7 @@ import { Camera, Plus, Trash2, Video, VideoOff, X, Play } from 'lucide-react';
 import { camerasApi, eventsApi } from '@/lib/api';
 import { useState } from 'react';
 import { CameraStreamModal } from '@/components/CameraStreamModal';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 interface CameraFormData {
   name: string;
@@ -49,7 +50,9 @@ export default function CamerasPage() {
     queryFn: () => camerasApi.list(),
   });
 
-  // Get latest event for selected camera to show snapshot
+  // Get latest event for selected camera (snapshot fallback when stream fails).
+  // Fetched once when the modal opens; invalidated via WebSocket when a new
+  // fire/smoke event arrives for this camera — no polling needed.
   const { data: latestEvents } = useQuery({
     queryKey: ['latestEvent', selectedCamera?.id],
     queryFn: async () => {
@@ -61,7 +64,20 @@ export default function CamerasPage() {
       }
     },
     enabled: !!selectedCamera && showStreamModal,
-    refetchInterval: 3000, // Refresh every 3 seconds
+  });
+
+  // Invalidate latestEvent when a fire/smoke event arrives for the open camera
+  useWebSocket({
+    onMessage: (msg) => {
+      if (
+        selectedCamera &&
+        showStreamModal &&
+        msg.camera_id === selectedCamera.id &&
+        (msg.event_type === 'fire' || msg.event_type === 'smoke')
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['latestEvent', selectedCamera.id] });
+      }
+    },
   });
   
   const latestEventsArr = Array.isArray(latestEvents) ? latestEvents : (latestEvents as any)?.data ?? [];
@@ -160,8 +176,8 @@ export default function CamerasPage() {
                   <h3 className="camera-name">{camera.name}</h3>
                   <p className="camera-site">📍 {camera.site_id}</p>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                    Status: <span style={{ color: camera.status === 'streaming' ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                      {camera.status}
+                    Trạng thái: <span style={{ color: camera.status === 'streaming' ? 'var(--color-success)' : 'var(--color-warning)' }}>
+                      {camera.status === 'streaming' ? 'Đang stream' : camera.status === 'idle' ? 'Chờ' : camera.status}
                     </span>
                   </p>
                 </div>
@@ -242,7 +258,7 @@ export default function CamerasPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Detector Camera ID *</label>
+                  <label className="form-label">ID Camera Detector *</label>
                   <input
                     className="form-input"
                     placeholder="cam-01"
@@ -292,7 +308,7 @@ export default function CamerasPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
                   <div className="form-group">
-                    <label className="form-label">FPS Sample</label>
+                    <label className="form-label">Tần suất FPS</label>
                     <input
                       className="form-input"
                       type="number"
@@ -303,7 +319,7 @@ export default function CamerasPage() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Conf Fire</label>
+                    <label className="form-label">Ngưỡng Lửa</label>
                     <input
                       className="form-input"
                       type="number"
@@ -315,7 +331,7 @@ export default function CamerasPage() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Conf Smoke</label>
+                    <label className="form-label">Ngưỡng Khói</label>
                     <input
                       className="form-input"
                       type="number"
@@ -327,7 +343,7 @@ export default function CamerasPage() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Conf Other</label>
+                    <label className="form-label">Ngưỡng Khác</label>
                     <input
                       className="form-input"
                       type="number"
@@ -337,7 +353,7 @@ export default function CamerasPage() {
                       value={formData.conf_other}
                       onChange={(e) => setFormData({ ...formData, conf_other: parseFloat(e.target.value) })}
                     />
-                    <small style={{ color: 'var(--text-muted)' }}>Class 2</small>
+                    <small style={{ color: 'var(--text-muted)' }}>Lớp khác</small>
                   </div>
                 </div>
               </div>
@@ -371,7 +387,7 @@ export default function CamerasPage() {
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label className="form-label">Detector Camera ID</label>
+                <label className="form-label">ID Camera Detector</label>
                 <input
                   className="form-input"
                   value={editData.detector_camera_id}
@@ -393,7 +409,7 @@ export default function CamerasPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
                 <div className="form-group">
-                  <label className="form-label">FPS Sample</label>
+                  <label className="form-label">Tần suất FPS</label>
                   <input
                     className="form-input"
                     type="number"
@@ -404,7 +420,7 @@ export default function CamerasPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Conf Fire</label>
+                  <label className="form-label">Ngưỡng Lửa</label>
                   <input
                     className="form-input"
                     type="number"
@@ -416,7 +432,7 @@ export default function CamerasPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Conf Smoke</label>
+                  <label className="form-label">Ngưỡng Khói</label>
                   <input
                     className="form-input"
                     type="number"
@@ -428,7 +444,7 @@ export default function CamerasPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Conf Other</label>
+                  <label className="form-label">Ngưỡng Khác</label>
                   <input
                     className="form-input"
                     type="number"

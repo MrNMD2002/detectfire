@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "fire-detect"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["detector:9000"]
+        labels:
+          service: "detector"
+          env: "production"

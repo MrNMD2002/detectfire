@@ -70,20 +70,22 @@ pub fn postprocess(
 
 /// Parse a single detection from raw output
 fn parse_detection(det: &[f32]) -> (BoundingBox, f32, usize) {
-    // Assuming format: [x1, y1, x2, y2, confidence, class_id]
-    // Coordinates are already normalized to [0, 1] for 640x640 input
-    
+    // Format: [x1, y1, x2, y2, confidence, class_id]
+    // YOLOv10/v26 end-to-end NMS models output coordinates in pixel space
+    // for the model input size (640×640). Normalize to [0, 1] before storing.
+    // (process_standard_yolo already divides by 640 in postprocess_with_probs)
+
     if det.len() >= 6 {
-        // YOLOv10 format: x1, y1, x2, y2, conf, class
-        let x1 = det[0].clamp(0.0, 1.0);
-        let y1 = det[1].clamp(0.0, 1.0);
-        let x2 = det[2].clamp(0.0, 1.0);
-        let y2 = det[3].clamp(0.0, 1.0);
+        const MODEL_INPUT_SIZE: f32 = 640.0;
+        let x1 = (det[0] / MODEL_INPUT_SIZE).clamp(0.0, 1.0);
+        let y1 = (det[1] / MODEL_INPUT_SIZE).clamp(0.0, 1.0);
+        let x2 = (det[2] / MODEL_INPUT_SIZE).clamp(0.0, 1.0);
+        let y2 = (det[3] / MODEL_INPUT_SIZE).clamp(0.0, 1.0);
         let confidence = det[4];
         let class_id = det[5] as usize;
-        
+
         let bbox = BoundingBox::new(x1, y1, x2 - x1, y2 - y1);
-        
+
         (bbox, confidence, class_id)
     } else {
         // Fallback for unexpected format

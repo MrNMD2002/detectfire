@@ -1,4 +1,4 @@
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode } from 'react';
 import {
   Flame,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { eventsApi, camerasApi } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 interface CameraStatusData {
   status: string;
@@ -38,7 +38,41 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: ReactN
 };
 
 export default function DashboardPage() {
+  const queryClient = useQueryClient();
   const [realtimeEvents, setRealtimeEvents] = useState<any[]>([]);
+  const [ackError, setAckError] = useState<string | null>(null);
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (id: string) => eventsApi.acknowledge(id),
+    onMutate: async (id) => {
+      setAckError(null);
+      await queryClient.cancelQueries({ queryKey: ['recentEvents'] });
+      const previousData = queryClient.getQueriesData<{ data: any[]; total: number }>({ queryKey: ['recentEvents'] });
+      // Optimistically mark acknowledged in query cache
+      queryClient.setQueriesData<{ data: any[]; total: number }>(
+        { queryKey: ['recentEvents'] },
+        (old) => {
+          if (!old?.data) return old;
+          return { ...old, data: old.data.map((e: any) => e.id === id ? { ...e, acknowledged: true } : e) };
+        }
+      );
+      // Optimistically mark acknowledged in realtime events state
+      const previousRealtime = realtimeEvents;
+      setRealtimeEvents(prev => prev.map(e => e.id === id ? { ...e, acknowledged: true } : e));
+      return { previousData, previousRealtime };
+    },
+    onError: (_err, _id, context: any) => {
+      context?.previousData?.forEach(([key, data]: [readonly unknown[], unknown]) => {
+        queryClient.setQueryData(key as any, data);
+      });
+      if (context?.previousRealtime) setRealtimeEvents(context.previousRealtime);
+      setAckError('Xác nhận thất bại. Vui lòng thử lại.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['recentEvents'] });
+      queryClient.invalidateQueries({ queryKey: ['eventStats'] });
+    },
+  });
 
   // Fetch stats — filter "today" (from midnight local time)
   const todayStart = new Date();
@@ -56,29 +90,27 @@ export default function DashboardPage() {
     queryFn: () => camerasApi.list(),
   });
 
-  // Fetch recent events
-  const { data: recentEventsPage } = useQuery({
-    queryKey: ['recentEvents'],
-    queryFn: () => eventsApi.list({ limit: 5 }),
-    refetchInterval: 10000,
-  });
-  const recentEvents = recentEventsPage?.data;
-
-  // Camera status polling — one query per camera, refetch every 15s
-  const cameraStatusQueries = useQueries({
-    queries: (cameras || []).map((camera: any) => ({
-      queryKey: ['cameraStatus', camera.id],
-      queryFn: (): Promise<CameraStatusData> => camerasApi.getStatus(camera.id),
-      refetchInterval: 15000,
-      retry: false,
-    })),
-  });
-
-  // WebSocket for real-time events
+  // WebSocket for real-time events — must be declared before queries that depend on isConnected
   const { isConnected } = useWebSocket({
     onMessage: (message) => {
       setRealtimeEvents((prev) => [message, ...prev].slice(0, 5));
     },
+  });
+
+  // Fetch recent events — poll only when WebSocket is down; WS pushes live events otherwise
+  const { data: recentEventsPage } = useQuery({
+    queryKey: ['recentEvents'],
+    queryFn: () => eventsApi.list({ limit: 5 }),
+    refetchInterval: isConnected ? false : 10000,
+  });
+  const recentEvents = recentEventsPage?.data;
+
+  // Single batch query for all camera statuses — 1 DB query + 1 gRPC call per cycle
+  const { data: allCameraStatuses, isLoading: statusesLoading } = useQuery({
+    queryKey: ['cameraStatuses'],
+    queryFn: () => camerasApi.getAllStatuses(),
+    refetchInterval: 15000,
+    retry: false,
   });
 
   const statsData = stats || {
@@ -91,25 +123,38 @@ export default function DashboardPage() {
   const camerasData = cameras || [];
   const activeCount = camerasData.filter((c: any) => c.enabled).length;
 
+  // Derive active unacknowledged critical events for Glitch effect and Terminal red alerts
+  const activeCritEvents = useMemo(() => {
+    return ((recentEventsPage?.data || []) as any[])
+      .filter(e => !e.acknowledged && (e.event_type === 'fire' || e.event_type === 'smoke')).length;
+  }, [recentEventsPage]);
+
   return (
     <>
-      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      {activeCritEvents > 0 && <div className="critical-alert-active" />}
+      <div className={activeCritEvents > 0 ? "glitch-effect" : ""}>
+        <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">Tổng quan hệ thống phát hiện cháy và khói</p>
         </div>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, fontSize: 13,
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
           color: isConnected ? 'var(--color-success)' : 'var(--text-muted)',
-          paddingTop: 4,
+          padding: '6px 12px',
+          background: 'var(--bg-card)',
+          borderRadius: 20,
+          border: '1px solid var(--border-color)',
+          boxShadow: isConnected ? 'var(--glow-success)' : 'none',
         }}>
           <span style={{
             width: 8, height: 8, borderRadius: '50%',
             backgroundColor: isConnected ? 'var(--color-success)' : 'var(--color-warning)',
             display: 'inline-block',
             boxShadow: isConnected ? '0 0 0 2px color-mix(in srgb, var(--color-success) 25%, transparent)' : 'none',
+            animation: isConnected ? 'pulse-glow-fire 2s infinite' : 'none',
           }} />
-          {isConnected ? 'Live' : 'Đang kết nối...'}
+          <span style={{ fontWeight: 500 }}>{isConnected ? 'System Online' : 'Connecting...'}</span>
         </div>
       </header>
 
@@ -185,59 +230,84 @@ export default function DashboardPage() {
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cập nhật mỗi 15s</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, padding: '0 0 4px' }}>
-              {camerasData.map((camera: any, idx: number) => {
-                const query = cameraStatusQueries[idx];
-                const st = query?.data as CameraStatusData | undefined;
+              {camerasData.map((camera: any) => {
+                const st = allCameraStatuses?.[camera.id] as CameraStatusData | undefined;
                 const statusKey = st?.status || 'unknown';
                 const cfg = STATUS_CONFIG[statusKey] || STATUS_CONFIG['unknown'];
-                const isLoading = query?.isLoading;
+                const isLoading = statusesLoading;
 
                 return (
                   <div key={camera.id} style={{
                     border: '1px solid var(--border-color)',
-                    borderRadius: 8,
-                    padding: '12px 14px',
+                    borderRadius: 12,
+                    padding: '14px 16px',
                     background: 'var(--bg-secondary)',
+                    boxShadow: 'var(--shadow-sm)',
+                    position: 'relative',
+                    overflow: 'hidden',
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    {/* Glowing active indicator line at the top */}
+                    {statusKey === 'streaming' && (
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                        background: 'linear-gradient(90deg, transparent, var(--color-success), transparent)',
+                        opacity: 0.8
+                      }} />
+                    )}
+                    {statusKey === 'failed' && (
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                        background: 'linear-gradient(90deg, transparent, var(--color-error), transparent)',
+                        opacity: 0.8
+                      }} />
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{camera.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {camera.detector_camera_id || camera.id.slice(0, 8)}
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                          ID: {camera.detector_camera_id || camera.id.slice(0, 8)}
                         </div>
                       </div>
                       {isLoading ? (
                         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>...</span>
                       ) : (
                         <span style={{
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          fontSize: 12, color: cfg.color,
-                          background: `color-mix(in srgb, ${cfg.color} 12%, transparent)`,
-                          padding: '3px 8px', borderRadius: 12,
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          fontSize: 12, color: cfg.color, fontWeight: 500,
+                          background: `color-mix(in srgb, ${cfg.color} 10%, transparent)`,
+                          padding: '4px 10px', borderRadius: 12,
+                          border: `1px solid color-mix(in srgb, ${cfg.color} 30%, transparent)`,
                         }}>
                           {cfg.icon}{cfg.label}
                         </span>
                       )}
                     </div>
-                    {st && (
-                      <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+                    {st ? (
+                      <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
                         {st.fps_in != null && (
-                          <span title="FPS vào">▶ {Number(st.fps_in).toFixed(1)} fps</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="FPS Camera gửi vào">
+                            <span style={{ color: 'var(--color-primary)' }}>▶</span> {Number(st.fps_in).toFixed(1)} <span style={{fontSize: 10, color: 'var(--text-muted)'}}>FPS IN</span>
+                          </div>
                         )}
                         {st.fps_infer != null && (
-                          <span title="FPS inference">⚡ {Number(st.fps_infer).toFixed(1)} infer</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title="FPS CPU/GPU xử lý">
+                            <span style={{ color: 'var(--color-secondary)' }}>⚡</span> {Number(st.fps_infer).toFixed(1)} <span style={{fontSize: 10, color: 'var(--text-muted)'}}>FPS OUT</span>
+                          </div>
                         )}
                         {(st.reconnect_count ?? 0) > 0 && (
-                          <span title="Số lần reconnect" style={{ color: '#f97316' }}>
+                          <span title="Số lần reconnect" style={{ color: 'var(--color-warning)' }}>
                             ↺ {st.reconnect_count}
                           </span>
                         )}
                         {st.error_message && (
-                          <span title={st.error_message} style={{ color: 'var(--color-danger)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+                          <span title={st.error_message} style={{ color: 'var(--color-error)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
                             {st.error_message}
                           </span>
                         )}
                       </div>
+                    ) : (
+                       <div style={{ height: 18 }}></div>
                     )}
                   </div>
                 );
@@ -255,6 +325,11 @@ export default function DashboardPage() {
             </a>
           </div>
 
+          {ackError && (
+            <div style={{ background: 'var(--color-danger, #e53e3e)', color: '#fff', padding: '8px 16px', borderRadius: 6, marginBottom: 12, fontSize: 14 }}>
+              {ackError}
+            </div>
+          )}
           <div className="events-timeline">
             {(realtimeEvents.length > 0 ? realtimeEvents : recentEvents || []).map(
               (event: any, index: number) => (
@@ -265,7 +340,7 @@ export default function DashboardPage() {
                   <div className="event-thumbnail">
                     {event.snapshot_path ? (
                       <img
-                        src={`/snapshots/${event.snapshot_path}`}
+                        src={`/api/snapshots/${event.snapshot_path}`}
                         alt="Snapshot"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
@@ -308,13 +383,17 @@ export default function DashboardPage() {
                     <div className="event-details">
                       <span>📍 {event.site_id}</span>
                       <span>🎯 {(event.confidence * 100).toFixed(1)}%</span>
-                      <span>
-                        {event.acknowledged ? (
-                          <span style={{ color: 'var(--color-success)' }}>✓ Đã xác nhận</span>
-                        ) : (
-                          <span style={{ color: 'var(--color-warning)' }}>⏳ Chờ xử lý</span>
-                        )}
-                      </span>
+                      {event.acknowledged ? (
+                        <span style={{ color: 'var(--color-success)' }}>✓ Đã xác nhận</span>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          disabled={acknowledgeMutation.isPending}
+                          onClick={() => acknowledgeMutation.mutate(event.id)}
+                        >
+                          Xác nhận
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -328,6 +407,7 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </>
   );

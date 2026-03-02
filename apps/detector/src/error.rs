@@ -1,3 +1,4 @@
+
 //! Error types for the detector service
 //!
 //! Sử dụng thiserror để định nghĩa các error types với proper error handling.

@@ -1,16 +1,16 @@
 cameras:
-- camera_id: cam-02
-  site_id: 'site ID '
-  name: 'camera công ty '
-  description: 'Team AI '
+- camera_id: cam-01
+  site_id: site-01
+  name: camera công ty
+  description: ''
   rtsp_url: rtsp://root:Admin!123@10.1.1.174:554/cam/realmonitor?channel=1&subtype=0
   enabled: true
   codec: h265
-  fps_sample: 6
+  fps_sample: 3
   imgsz: 640
-  conf_fire: 0.7
-  conf_smoke: 0.7
-  conf_other: 0.4
+  conf_fire: 0.57
+  conf_smoke: 0.5
+  conf_other: 0.45
   window_size: 10
   fire_hits: 3
   smoke_hits: 3

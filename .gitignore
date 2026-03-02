@@ -39,8 +39,9 @@ models/*.onnx
 models/*.pt
 models/*.pth
 
-# Snapshots
+# Snapshots (runtime data)
 snapshots/
+apps/web/public/snapshots/
 
 # Database
 *.db

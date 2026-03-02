@@ -1,0 +1,73 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: fire-detect-prometheus
+    restart: unless-stopped
+    volumes:
+      - ../grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    networks:
+      - fire-detect-net
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: fire-detect-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - fire-detect-net
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: fire-detect-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../promtail.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - fire-detect-net
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: fire-detect-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_THEME_DEFAULT=dark
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/fire-detection.json
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - fire-detect-net
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  fire-detect-net:
+    external: true
+    name: docker_fire-detect-net

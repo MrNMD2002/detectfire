@@ -1,11 +1,14 @@
 import { Outlet, NavLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Camera, 
   Bell, 
   Settings, 
   LogOut,
-  Flame
+  Flame,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -18,6 +21,19 @@ const navItems = [
 
 export default function MainLayout() {
   const { user, logout } = useAuthStore();
+  const [isDark, setIsDark] = useState(() => {
+    return localStorage.getItem('theme') !== 'light';
+  });
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.add('light');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDark]);
 
   return (
     <div className="app-layout">
@@ -56,6 +72,14 @@ export default function MainLayout() {
               {user?.email}
             </div>
           </div>
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="nav-item"
+            style={{ width: '100%', cursor: 'pointer', background: 'none', border: 'none' }}
+          >
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+            <span>{isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
+          </button>
           <button
             onClick={logout}
             className="nav-item"

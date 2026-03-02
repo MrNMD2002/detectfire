@@ -41,32 +41,42 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
     },
   });
 
-  // Draw detection overlay on canvas
+  // Draw detection overlay on canvas — positioned to match the actual rendered image area
   useEffect(() => {
     const img = imgRef.current;
     const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!img || !canvas || !container || lastDetections.length === 0) return;
+    if (!img || !canvas || lastDetections.length === 0) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const draw = () => {
-      const rect = img.getBoundingClientRect();
-      const scaleX = rect.width / (img.naturalWidth || 640);
-      const scaleY = rect.height / (img.naturalHeight || 640);
+      // Use the image's natural rendered rect (width:100%, height:auto)
+      const imgRect = img.getBoundingClientRect();
+      const renderW = imgRect.width;
+      const renderH = imgRect.height;
 
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = renderW;
+      canvas.height = renderH;
+
+      // Position canvas exactly over the image element
+      canvas.style.width = `${renderW}px`;
+      canvas.style.height = `${renderH}px`;
+
+      ctx.clearRect(0, 0, renderW, renderH);
+
+      const natW = img.naturalWidth || 640;
+      const natH = img.naturalHeight || 640;
+      const scaleX = renderW / natW;
+      const scaleY = renderH / natH;
 
       for (const det of lastDetections) {
         const bbox = det.bbox;
         const isNormalized = bbox.x <= 1 && bbox.y <= 1 && bbox.width <= 1 && bbox.height <= 1;
-        const x = isNormalized ? bbox.x * rect.width : bbox.x * scaleX;
-        const y = isNormalized ? bbox.y * rect.height : bbox.y * scaleY;
-        const w = isNormalized ? bbox.width * rect.width : bbox.width * scaleX;
-        const h = isNormalized ? bbox.height * rect.height : bbox.height * scaleY;
+        const x = isNormalized ? bbox.x * renderW : bbox.x * scaleX;
+        const y = isNormalized ? bbox.y * renderH : bbox.y * scaleY;
+        const w = isNormalized ? bbox.width * renderW : bbox.width * scaleX;
+        const h = isNormalized ? bbox.height * renderH : bbox.height * scaleY;
 
         const cls = det.class || det.class_name || 'detection';
         ctx.strokeStyle = cls === 'fire' ? '#ff4444' : '#44aaff';
@@ -75,8 +85,8 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
         ctx.fillStyle = cls === 'fire' ? 'rgba(255,68,68,0.2)' : 'rgba(68,170,255,0.2)';
         ctx.fillRect(x, y, w, h);
         ctx.fillStyle = '#fff';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(`${cls} ${(det.confidence * 100).toFixed(0)}%`, x, y - 4);
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`${cls} ${(det.confidence * 100).toFixed(0)}%`, x, y > 16 ? y - 4 : y + 14);
       }
     };
 
@@ -203,14 +213,16 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
           </button>
         </div>
         <div className="modal-body">
+          {/* Stream container — no black background; image fills width at natural aspect ratio */}
           <div
             ref={containerRef}
             style={{
-              background: '#000',
               borderRadius: 8,
-              minHeight: 400,
               position: 'relative',
               overflow: 'hidden',
+              background: 'var(--bg-secondary, #1a1f2e)',
+              // Reserve height only while loading so layout doesn't collapse
+              minHeight: streamLoading && !streamError ? 400 : undefined,
             }}
           >
             {/* MJPEG live frame via blob URL — updated by fetch loop above */}
@@ -220,21 +232,20 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
                   ref={imgRef}
                   alt="Live stream"
                   style={{
+                    // width:100% + height:auto = natural aspect ratio, no black bars
                     width: '100%',
-                    maxHeight: 500,
+                    height: 'auto',
                     display: streamLoading ? 'none' : 'block',
-                    objectFit: 'contain',
+                    borderRadius: 8,
                   }}
                 />
-                {/* Canvas overlay for detection bounding boxes */}
+                {/* Canvas overlay sits exactly on top of the img element */}
                 <canvas
                   ref={canvasRef}
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: '100%',
-                    height: '100%',
                     pointerEvents: 'none',
                   }}
                 />
@@ -246,7 +257,7 @@ export function CameraStreamModal({ camera, onClose, latestEvent }: CameraStream
               <img
                 src={`/api/snapshots/${latestEvent.snapshot_path}`}
                 alt="Snapshot"
-                style={{ width: '100%', maxHeight: 500, objectFit: 'contain' }}
+                style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 8 }}
               />
             )}
 

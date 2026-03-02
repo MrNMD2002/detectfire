@@ -1,5 +1,6 @@
 //! Camera routes
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use axum::{
     extract::Path,
@@ -24,6 +25,7 @@ pub fn routes() -> Router {
     Router::new()
         .route("/", get(list_cameras))
         .route("/", post(create_camera))
+        .route("/statuses", get(get_all_camera_statuses))
         .route("/:id", get(get_camera))
         .route("/:id", put(update_camera))
         .route("/:id", delete(delete_camera))
@@ -111,6 +113,88 @@ async fn delete_camera(
     }
     
     Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+/// Get status for all cameras from detector in a single gRPC call.
+/// Returns a map of { camera_uuid: CameraStatusData } for O(1) frontend lookup.
+async fn get_all_camera_statuses(
+    Extension(state): Extension<Arc<AppState>>,
+    _user: AuthUser,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let cameras = state.db.list_cameras().await?;
+
+    let detector_addr = format!(
+        "{}:{}",
+        state.config.detector.host,
+        state.config.detector.grpc_port
+    );
+
+    // Single gRPC call for all statuses
+    let (detector_available, status_by_detector_id): (bool, HashMap<String, serde_json::Value>) =
+        match DetectorClient::connect(&detector_addr).await {
+            Ok(mut client) => match client.get_camera_statuses().await {
+                Ok(status_list) => {
+                    let map = status_list
+                        .cameras
+                        .into_iter()
+                        .map(|s| {
+                            let status_str = match s.status {
+                                0 => "unknown",
+                                1 => "connecting",
+                                2 => "connected",
+                                3 => "streaming",
+                                4 => "reconnecting",
+                                5 => "failed",
+                                6 => "disabled",
+                                _ => "unknown",
+                            };
+                            let val = serde_json::json!({
+                                "status": status_str,
+                                "reconnect_count": s.reconnect_count,
+                                "fps_in": s.fps_in,
+                                "fps_infer": s.fps_infer,
+                                "last_frame_timestamp": s.last_frame_timestamp,
+                                "error_message": s.error_message,
+                            });
+                            (s.camera_id, val)
+                        })
+                        .collect();
+                    (true, map)
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to get camera statuses from detector");
+                    (false, HashMap::new())
+                }
+            },
+            Err(e) => {
+                warn!(error = %e, "Failed to connect to detector");
+                (false, HashMap::new())
+            }
+        };
+
+    // Build result map keyed by camera UUID
+    let mut result = serde_json::Map::new();
+    for camera in &cameras {
+        let detector_cam_id = camera
+            .detector_camera_id
+            .clone()
+            .unwrap_or_else(|| camera.id.to_string());
+
+        let mut status = if let Some(s) = status_by_detector_id.get(&detector_cam_id) {
+            s.clone()
+        } else {
+            let status_str = if detector_available { "not_found" } else { "detector_unavailable" };
+            serde_json::json!({ "status": status_str })
+        };
+
+        if let serde_json::Value::Object(ref mut m) = status {
+            m.insert("detector_camera_id".to_string(), serde_json::json!(detector_cam_id));
+        }
+
+        result.insert(camera.id.to_string(), status);
+    }
+
+    Ok(Json(serde_json::Value::Object(result)))
 }
 
 /// Get camera status from detector

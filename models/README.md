@@ -2,6 +2,13 @@
 
 Model phát hiện lửa và khói real-time dựa trên **YOLOv26-S** (Ultralytics). Đạt **94.9% mAP@50** trên bài toán phát hiện fire/smoke.
 
+> ⚠️ **Lưu ý quan trọng:** File `*.onnx` và `*.pt` bị loại khỏi git (`.gitignore`).
+> Sau khi clone repo, cần đặt thủ công:
+> - `models/best.onnx` — model inference (detector dùng file này, **bắt buộc**)
+> - `models/best.pt` — PyTorch weights (dùng để export/fine-tune)
+>
+> Nếu có file tên khác (vd: `fire_smoke_yolo.onnx`), đổi tên thành `best.onnx`.
+
 ## Thông tin model
 
 | Thuộc tính | Giá trị |

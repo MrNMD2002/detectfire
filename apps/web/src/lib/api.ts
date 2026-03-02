@@ -47,6 +47,10 @@ export const camerasApi = {
     const response = await api.get(`/cameras/${id}/status`);
     return response.data;
   },
+  getAllStatuses: async (): Promise<Record<string, any>> => {
+    const response = await api.get('/cameras/statuses');
+    return response.data;
+  },
 };
 
 export const eventsApi = {

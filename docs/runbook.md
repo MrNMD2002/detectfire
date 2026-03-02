@@ -46,7 +46,8 @@ curl http://localhost:8080/health
 
 **Option 1: Via Web UI**
 
-1. Đăng nhập http://localhost
+1. Đăng nhập 
+
 2. Vào Cameras > Add Camera
 3. Điền thông tin RTSP
 
