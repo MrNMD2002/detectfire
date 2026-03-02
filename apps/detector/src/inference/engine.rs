@@ -71,16 +71,24 @@ impl InferenceEngine {
             #[cfg(feature = "gpu")]
             {
                 use ort::ep;
+
+                // TensorRT EP: compile model → optimized engine (FP16 Tensor Cores, 2-3x vs CUDA)
+                // Config via env vars (set in docker-compose.yml):
+                //   ORT_TENSORRT_FP16_ENABLE=1
+                //   ORT_TENSORRT_ENGINE_CACHE_ENABLE=1
+                //   ORT_TENSORRT_CACHE_PATH=/app/trt_engines/
+                // First run compiles TRT engine (~2-5 min), cached for subsequent restarts.
+                // Falls back to CUDA EP if TensorRT libs unavailable.
                 session_builder = match session_builder.with_execution_providers([
+                    ep::TensorRT::default().build(),
                     ep::CUDA::default().build(),
                 ]) {
                     Ok(builder) => {
-                        info!(device_id = device_id, "CUDA execution provider registered");
+                        info!(device_id = device_id, "TensorRT + CUDA execution providers registered");
                         builder
                     }
                     Err(e) => {
-                        warn!(error = %e, "CUDA EP registration failed, falling back to CPU");
-                        // Re-create session builder for CPU fallback
+                        warn!(error = %e, "GPU EP registration failed, falling back to CPU");
                         Session::builder()
                             .map_err(|e2| DetectorError::ModelLoadError(format!("Failed to recreate session builder: {}", e2)))?
                             .with_intra_threads(config.num_threads)

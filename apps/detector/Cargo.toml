@@ -15,7 +15,7 @@ debug = 1 # Include debug info for better error messages
 
 [features]
 default = ["gpu"]
-gpu = ["ort/cuda", "ort/load-dynamic", "ort/download-binaries"]
+gpu = ["ort/cuda", "ort/tensorrt", "ort/load-dynamic", "ort/download-binaries"]
 cpu = ["ort/load-dynamic"]
 
 [dependencies]

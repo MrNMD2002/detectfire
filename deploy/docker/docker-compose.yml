@@ -39,10 +39,15 @@ services:
       CAM_01_RTSP_URL: ${CAM_01_RTSP_URL}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      # TensorRT EP: FP16 + engine cache (trt_engines volume)
+      ORT_TENSORRT_FP16_ENABLE: "1"
+      ORT_TENSORRT_ENGINE_CACHE_ENABLE: "1"
+      ORT_TENSORRT_CACHE_PATH: /app/trt_engines/
     volumes:
       - ../../configs:/app/configs:ro
       - ../../models:/app/models:ro
       - snapshots:/app/snapshots
+      - trt_engines:/app/trt_engines
     networks:
       - fire-detect-net
     depends_on:
@@ -107,6 +112,7 @@ services:
 volumes:
   postgres_data:
   snapshots:
+  trt_engines:
 
 networks:
   fire-detect-net:

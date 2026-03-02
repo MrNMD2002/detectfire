@@ -80,7 +80,8 @@ FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
 
 WORKDIR /app
 
-# Runtime dependencies
+# Runtime dependencies + TensorRT 10.x (libnvinfer minimal — required for ORT TensorRT EP)
+# NVIDIA apt key + repo đã có sẵn trong base image nvidia/cuda:12.6.x
 RUN apt-get update && apt-get install -y \
     libgstreamer1.0-0 \
     gstreamer1.0-plugins-base \
@@ -93,6 +94,18 @@ RUN apt-get update && apt-get install -y \
     procps \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
+
+# Install TensorRT runtime (libnvinfer) for ORT TensorRT EP
+# Chỉ install runtime libs (~300MB), không cần dev headers
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libnvinfer10 \
+        libnvinfer-plugin10 \
+        libnvonnxparsers10 \
+    && rm -rf /var/lib/apt/lists/*
+
+# TRT engine cache dir (persisted via Docker volume)
+RUN mkdir -p /app/trt_engines && chmod 777 /app/trt_engines
 
 # Binary
 COPY --from=builder /app/target/release/fire-detector /usr/local/bin/fire-detector
