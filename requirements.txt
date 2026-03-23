@@ -21,7 +21,7 @@ Pillow>=10.0
 # ── Inference API ──────────────────────────────────────────────────────────────
 fastapi>=0.111
 uvicorn[standard]>=0.29
-opencv-python>=4.9          # RTSP + webcam capture (mirrors MBFS_Stream capture role)
+opencv-python>=4.9          # RTSP + webcam capture
 python-multipart>=0.0.9     # FastAPI file upload support
 
 # ── Monitoring ────────────────────────────────────────────────────────────────

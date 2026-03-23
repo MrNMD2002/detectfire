@@ -1,23 +1,23 @@
 """
-StreamManager — Python mirror of MBFS_Stream's PluginStream architecture.
+StreamManager — low-latency multi-camera stream processor for fire detection.
 
-Low-latency design (mirrors MBFS_Stream PluginStreamConfig defaults):
+Low-latency design:
   latency_ms  = 50        → FFmpeg fflags=nobuffer + rtsp_transport=tcp
   max_buffers = 2         → FrameGrabber keeps only latest frame (drop_frames=true)
   drop_frames = true      → FrameGrabber drops old frames, processing thread gets latest
   max_fps     = 10-15     → rate limiting in processing thread
 
-Mirrors key MBFS_Stream types:
-  PluginFrame   → frame data + metadata broadcast to subscribers
-  StreamStats   → total_frames, dropped_frames, reconnect_count, using_gpu, fps
+Key types:
+  PluginFrame     → frame data + metadata broadcast to subscribers
+  StreamStats     → total_frames, dropped_frames, reconnect_count, using_gpu, fps
   ReconnectConfig → delay_ms, max_attempts, backoff
 
-Each CameraStream runs in its own thread (like mbfs_stream::plugin::PluginStream):
+Each CameraStream runs in its own thread:
   OpenCV capture → YOLO detect → annotate → broadcast PluginFrame to subscribers
 
-Broadcast channel:  asyncio.Queue per subscriber (tokio::sync::broadcast equivalent)
-  - maxsize=4: drop oldest frame if subscriber too slow (drop: true in appsink)
-  - call_soon_threadsafe: thread→async bridge (same role as tokio's mpsc)
+Broadcast channel: asyncio.Queue per subscriber
+  - maxsize=4: drop oldest frame if subscriber too slow
+  - call_soon_threadsafe: thread→async bridge
 """
 from __future__ import annotations
 
@@ -60,14 +60,13 @@ _COLORS = {
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  Data types  (mirrors mbfs_stream::plugin)
+#  Data types
 # ══════════════════════════════════════════════════════════════════════════
 
 @dataclasses.dataclass
 class PluginFrame:
     """
-    Mirrors mbfs_stream::plugin::PluginFrame.
-    Sent to every WebSocket subscriber for each captured frame.
+    Frame data + detection metadata broadcast to every WebSocket subscriber.
     """
     type:        str            # always "frame"
     camera_id:   str
@@ -98,8 +97,7 @@ class PluginFrame:
 @dataclasses.dataclass
 class StreamStats:
     """
-    Mirrors mbfs_stream::plugin::StreamStats.
-    Tracks operational metrics per stream.
+    Operational metrics per camera stream.
     """
     total_frames:    int  = 0
     dropped_frames:  int  = 0
@@ -115,8 +113,7 @@ class StreamStats:
 @dataclasses.dataclass
 class ReconnectConfig:
     """
-    Mirrors mbfs_stream::config::ReconnectConfig.
-    Exponential backoff reconnect strategy.
+    Exponential backoff reconnect strategy for dropped streams.
     """
     delay_ms:     int = 2_000   # base delay
     max_attempts: int = 0       # 0 = unlimited
@@ -151,7 +148,7 @@ def _annotate(frame: np.ndarray, detections: list[dict]) -> np.ndarray:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  FrameGrabber  (mirrors appsink drop=true, max-buffers=2 in plugin.rs)
+#  FrameGrabber  (drop=true, max-buffers=2 design)
 # ══════════════════════════════════════════════════════════════════════════
 
 class _FrameGrabber:
@@ -159,7 +156,6 @@ class _FrameGrabber:
     Runs in a dedicated thread, continuously calling cap.read() at full speed
     to drain the OS/FFmpeg frame buffer.  Keeps only the LATEST frame.
 
-    Mirrors MBFS_Stream's appsink callback with drop=true + max-buffers=2:
       - Producer (grab thread): reads every frame, stores latest → zero buffer lag
       - Consumer (processing thread): retrieves latest when ready → no stale frames
 
@@ -193,8 +189,7 @@ class _FrameGrabber:
     def get_latest(self, timeout: float = 2.0) -> tuple[bool, np.ndarray | None]:
         """
         Block until a new frame is available (or timeout).
-        Returns (success, frame_copy).
-        Mirrors PluginStream::get_frame() — non-stale, always latest.
+        Returns (success, frame_copy) — non-stale, always latest.
         """
         got = self._ready.wait(timeout=timeout)
         self._ready.clear()
@@ -207,26 +202,25 @@ class _FrameGrabber:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  CameraStream  (mirrors mbfs_stream::plugin::PluginStream)
+#  CameraStream
 # ══════════════════════════════════════════════════════════════════════════
 
 class CameraStream:
     """
     Single-camera stream with AI detection and WebSocket broadcast.
 
-    Lifecycle mirrors PluginStream:
+    Lifecycle:
         stream = CameraStream(id, name, source, ...)
         stream.start(loop)          # spawns capture thread
         rx = stream.subscribe()     # get asyncio.Queue (broadcast receiver)
         stream.unsubscribe(rx)
         stream.stop()               # signal thread, join
 
-    Threading model (mirrors MBFS_Stream's decoupled AI consumer pattern):
+    Threading model (decoupled AI consumer pattern):
         _FrameGrabber thread  → drain cap at full speed, keep latest frame
         Broadcast thread      → get latest frame → encode JPEG → broadcast
                                 (does NOT block on YOLO — reads cached detections)
         YOLO worker thread    → receives latest frame, runs inference, stores result
-                                (mirrors MBFS_Stream AI consumer — fully decoupled)
     """
 
     def __init__(
@@ -263,7 +257,7 @@ class CameraStream:
         # Stats
         self._stats = StreamStats()
 
-        # ── YOLO async state (mirrors MBFS_Stream AI consumer) ──────────────
+        # ── YOLO async state ────────────────────────────────────────────────
         # Latest detections cached by YOLO worker; broadcast thread reads this
         # without blocking — detection may lag by 1 YOLO inference cycle (~50-300ms)
         # but the VIDEO FEED is always live at target_fps.
@@ -283,12 +277,12 @@ class CameraStream:
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Start the capture thread. Mirrors PluginStream::start()."""
+        """Start the capture thread."""
         self._loop = loop
         self._stop_event.clear()
         self._yolo_stop.clear()
 
-        # Start YOLO worker (decoupled from broadcast thread — mirrors MBFS_Stream AI consumer)
+        # Start YOLO worker (decoupled from broadcast thread)
         self._yolo_thread = threading.Thread(
             target=self._yolo_worker,
             args=(self._yolo_stop,),
@@ -307,7 +301,7 @@ class CameraStream:
         logger.info(f"[CameraStream:{self.id}] Started — source={self.source!r}")
 
     def stop(self) -> None:
-        """Signal thread to stop and join. Mirrors PluginStream::stop()."""
+        """Signal thread to stop and join."""
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
@@ -321,10 +315,10 @@ class CameraStream:
         self.is_running = False
         logger.info(f"[CameraStream:{self.id}] Stopped")
 
-    # ── Subscriber management  (broadcast::subscribe equivalent) ──────────
+    # ── Subscriber management ──────────────────────────────────────────────
 
     def subscribe(self) -> asyncio.Queue:
-        """Return a new broadcast receiver queue. Mirrors stream.subscribe().
+        """Return a new broadcast receiver queue.
         Immediately replays the last status so new subscribers don't miss early errors.
         """
         q: asyncio.Queue = asyncio.Queue(maxsize=4)
@@ -339,22 +333,21 @@ class CameraStream:
         return q
 
     def unsubscribe(self, q: asyncio.Queue) -> None:
-        """Remove a subscriber. Mirrors rx drop in Rust."""
+        """Remove a subscriber queue."""
         with self._sub_lock:
             if q in self._subscribers:
                 self._subscribers.remove(q)
 
     def stats(self) -> StreamStats:
-        """Mirrors PluginStream::stats() — returns a snapshot."""
+        """Returns a snapshot of current stream statistics."""
         return dataclasses.replace(self._stats)
 
-    # ── YOLO worker  (mirrors MBFS_Stream AI consumer) ───────────────────
+    # ── YOLO worker ───────────────────────────────────────────────────────
 
     def _yolo_worker(self, stop: threading.Event) -> None:
         """
         Dedicated YOLO inference thread — fully decoupled from the broadcast thread.
 
-        Mirrors MBFS_Stream's AI consumer pattern:
           - Receives latest raw frame via _pending_yolo_frame slot (overwrite if busy)
           - Runs inference at its own rate (no blocking of video broadcast)
           - Stores result in _latest_detections for broadcast thread to read async
@@ -463,7 +456,6 @@ class CameraStream:
         fps_count = 0
 
         # Start FrameGrabber — drains buffer at full speed, keeps only latest frame
-        # Mirrors appsink drop=true + max-buffers=2 from MBFS_Stream plugin.rs
         grabber = _FrameGrabber(cap, self._stop_event)
 
         try:
@@ -479,7 +471,6 @@ class CameraStream:
                 frame = cv2.resize(frame, (w, h))
 
                 # Submit frame to YOLO worker (non-blocking, overwrite if busy)
-                # Mirrors MBFS_Stream AI consumer — broadcast thread never waits for YOLO
                 with self._pending_yolo_lock:
                     self._pending_yolo_frame = frame
                 self._pending_yolo_ready.set()

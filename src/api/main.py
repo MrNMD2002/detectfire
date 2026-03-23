@@ -330,7 +330,7 @@ async def ws_stream(websocket: WebSocket, camera_id: str):
         await websocket.close()
         return
 
-    queue = stream.subscribe()   # broadcast receiver — mirrors stream.subscribe() in MBFS_Stream
+    queue = stream.subscribe()   # broadcast receiver queue
     logger.info(f"[WS] Client connected to camera {camera_id}")
 
     try:
