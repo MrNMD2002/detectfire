@@ -5,107 +5,115 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main]
+  workflow_dispatch:   # Cho phép chạy thủ công từ GitHub UI
 
 jobs:
-  # ──────────────────────────────────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────────────────────────
   # Job 1 — Lint
-  # ──────────────────────────────────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint (ruff)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Install ruff
-        run: pip install ruff
+        run: pip install ruff -q
 
       - name: Run ruff
         run: ruff check src/ tests/
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Job 2 — Unit tests (framework stages only — no GPU, no MLflow, no training)
-  # ──────────────────────────────────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 2 — Unit tests + coverage
+  # Self-hosted runner: có đủ deps, không cần cài torch lại (đã có trên máy)
+  # ────────────────────────────────────────────────────────────────────────────
   test:
-    name: Tests
-    runs-on: ubuntu-latest
+    name: Tests + Coverage
+    runs-on: self-hosted
     needs: lint
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
       - name: Install framework dependencies
-        # torch / ultralytics are commented-out in requirements.txt → not installed here
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt -q
+          pip install pytest-cov -q
 
-      - name: Run tests
-        run: pytest tests/ -v --tb=short
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # Job 3 — Config validation
-  # Loads all YAML configs and runs pipeline stages 1-6 (no MLflow, no GPU)
-  # ──────────────────────────────────────────────────────────────────────────
-  config-check:
-    name: Config validation
-    runs-on: ubuntu-latest
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 3 — Pipeline check
+  # Self-hosted: có MLflow local → chạy được tất cả 12 stages (training=disabled)
+  # ────────────────────────────────────────────────────────────────────────────
+  pipeline-check:
+    name: Pipeline check (12 stages, training disabled)
+    runs-on: self-hosted
     needs: lint
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
       - name: Install framework dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -q
 
-      - name: Validate all YAML configs load
+      - name: Run full pipeline (training disabled)
+        run: python -m src.pipeline.orchestrator
+
+      - name: Upload pipeline reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-reports
+          path: reports/
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 4 — Build Summary
+  # Luôn chạy cuối để tổng kết kết quả tất cả jobs
+  # ────────────────────────────────────────────────────────────────────────────
+  build-summary:
+    name: Build Summary
+    runs-on: self-hosted
+    needs: [lint, test, pipeline-check]
+    if: always()
+
+    steps:
+      - name: Print pipeline results
         run: |
-          python -c "
-          from src.core.config_loader import ConfigLoader
-          cfg = ConfigLoader()
-          loaded = cfg.load_all()
-          print(f'Loaded {len(loaded)} config files: {list(loaded.keys())}')
-          "
+          echo "========================================"
+          echo "  CI PIPELINE SUMMARY"
+          echo "========================================"
+          echo "  Lint:            ${{ needs.lint.result }}"
+          echo "  Tests:           ${{ needs.test.result }}"
+          echo "  Pipeline check:  ${{ needs.pipeline-check.result }}"
+          echo "========================================"
 
-      - name: Run pipeline (framework-only — training disabled)
-        env:
-          # Override training.yaml to skip training; MLflow failure is non-fatal
-          FIRE_TRAINING_ENABLED: "false"
+      - name: Mark success
+        if: |
+          needs.lint.result == 'success' &&
+          needs.test.result == 'success' &&
+          needs.pipeline-check.result == 'success'
         run: |
-          python -c "
-          import yaml
-          from pathlib import Path
+          echo " ALL CHECKS PASSED — ready to merge/deploy."
 
-          # Patch training.yaml in-memory by monkey-patching ConfigLoader
-          from src.core import config_loader as _cl
-          _orig_load = _cl.ConfigLoader.load
-
-          def _patched_load(self, filename):
-              data = _orig_load(self, filename)
-              if filename == 'training.yaml':
-                  data = dict(data)
-                  data['enabled'] = False   # skip GPU training in CI
-              return data
-
-          _cl.ConfigLoader.load = _patched_load
-
-          from src.pipeline.orchestrator import PipelineOrchestrator
-          o = PipelineOrchestrator()
-          # Run only framework stages (1-6): stop before MLflowSmokeRun to avoid needing server
-          stages_to_run = o.stages[:6]
-          for stage in stages_to_run:
-              ok = stage.run(o.ctx)
-              print(f'  {stage.name}: {\"OK\" if ok else \"WARN\"}')
-          print('Config check passed.')
-          "
+      - name: Mark failure
+        if: |
+          needs.lint.result != 'success' ||
+          needs.test.result != 'success' ||
+          needs.pipeline-check.result != 'success'
+        run: |
+          echo " PIPELINE FAILED — check logs above."
+          exit 1

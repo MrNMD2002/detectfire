@@ -3,6 +3,7 @@ name: CD — Build & Push API Image
 on:
   push:
     branches: [main]
+  workflow_dispatch:   # Cho phép build thủ công từ GitHub UI
 
 # Required permissions for GHCR push
 permissions:
@@ -12,19 +13,15 @@ permissions:
 jobs:
   build-and-push:
     name: Build Docker image → ghcr.io
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v4
 
-      # ── Convert repo name to lowercase (GHCR requirement) ─────────────────
+      # ── Convert repo name to lowercase (GHCR requirement) ──────────────────
       - name: Set lowercase image name
         run: |
           echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/fire-detection-api" >> $GITHUB_ENV
-
-      # ── Docker Buildx ──────────────────────────────────────────────────────
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       # ── Login to GitHub Container Registry ─────────────────────────────────
       - name: Log in to GHCR
@@ -59,5 +56,7 @@ jobs:
       # ── Summary ────────────────────────────────────────────────────────────
       - name: Print image digest
         run: |
-          echo "Image pushed:"
+          echo "========================================"
+          echo "  Docker image pushed to GHCR:"
           echo "  ${{ steps.meta.outputs.tags }}"
+          echo "========================================"
