@@ -3,12 +3,18 @@ name: CD — Build & Push API Image
 on:
   push:
     branches: [main]
-  workflow_dispatch:   # Cho phép build thủ công từ GitHub UI
+  workflow_dispatch:
 
-# Required permissions for GHCR push
 permissions:
   contents: read
   packages: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push:
@@ -18,12 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Convert repo name to lowercase (GHCR requirement) ──────────────────
+      # ── Lowercase image name (GHCR requirement) ────────────────────────────
       - name: Set lowercase image name
         run: |
           echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/fire-detection-api" >> $GITHUB_ENV
 
-      # ── Login to GitHub Container Registry ─────────────────────────────────
+      # ── Setup Docker Buildx ────────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker   # dùng Docker daemon có sẵn, không cần buildkit riêng
+
+      # ── Login GHCR ─────────────────────────────────────────────────────────
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -31,8 +43,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Derive image tags from git SHA and branch ──────────────────────────
-      - name: Extract metadata (tags, labels)
+      # ── Extract tags ───────────────────────────────────────────────────────
+      - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -41,7 +53,7 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # ── Build + Push ───────────────────────────────────────────────────────
+      # ── Build + Push (dùng local Docker cache, không cần registry cache) ──
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -50,8 +62,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
 
       # ── Summary ────────────────────────────────────────────────────────────
       - name: Print image digest

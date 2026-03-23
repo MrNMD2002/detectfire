@@ -7,10 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Force bash shell on all jobs (Windows runner defaults to PowerShell)
 defaults:
   run:
     shell: bash
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
