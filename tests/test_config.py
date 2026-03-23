@@ -2,10 +2,11 @@
 Tests for ConfigLoader — validates all YAML configs load and have required keys.
 No GPU, no MLflow, no external services needed.
 """
-import pytest
 from pathlib import Path
 
-from src.core.config_loader import ConfigLoader, PROJECT_ROOT
+import pytest
+
+from src.core.config_loader import PROJECT_ROOT, ConfigLoader
 
 
 @pytest.fixture

@@ -72,7 +72,7 @@ class FireDetector:
                     verbose=False,
                     stream=False,
                 )
-        except Exception as exc:
+        except Exception:
             if m:
                 m.INFERENCE_ERRORS.labels(error_type="predict_error").inc()
             raise

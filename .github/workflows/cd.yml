@@ -17,11 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Docker Buildx ────────────────────────────────────────────────────
+      # ── Convert repo name to lowercase (GHCR requirement) ─────────────────
+      - name: Set lowercase image name
+        run: |
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/fire-detection-api" >> $GITHUB_ENV
+
+      # ── Docker Buildx ──────────────────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── Login to GitHub Container Registry ───────────────────────────────
+      # ── Login to GitHub Container Registry ─────────────────────────────────
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -29,30 +34,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── Derive image tag from git SHA and branch ─────────────────────────
+      # ── Derive image tags from git SHA and branch ──────────────────────────
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/fire-detection-api
+          images: ${{ env.IMAGE }}
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # ── Build + Push ──────────────────────────────────────────────────────
+      # ── Build + Push ───────────────────────────────────────────────────────
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Layer cache via GHCR
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/fire-detection-api:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/fire-detection-api:buildcache,mode=max
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
 
-      # ── Summary ───────────────────────────────────────────────────────────
+      # ── Summary ────────────────────────────────────────────────────────────
       - name: Print image digest
         run: |
           echo "Image pushed:"

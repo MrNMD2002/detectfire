@@ -5,9 +5,10 @@ and provides run management helpers.
 from __future__ import annotations
 
 import os
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any, Optional
 
 import mlflow
 from mlflow.entities import Run
@@ -24,10 +25,10 @@ class MLflowClient:
     Reads mlflow.yaml for all configuration; nothing is hardcoded.
     """
 
-    def __init__(self, config_loader: Optional[ConfigLoader] = None) -> None:
+    def __init__(self, config_loader: ConfigLoader | None = None) -> None:
         self._cfg_loader = config_loader or ConfigLoader()
         self._cfg = self._cfg_loader.mlflow
-        self._active_run: Optional[Run] = None
+        self._active_run: Run | None = None
         self._configured = False
 
     # ------------------------------------------------------------------
@@ -74,8 +75,8 @@ class MLflowClient:
 
     def start_run(
         self,
-        run_name: Optional[str] = None,
-        tags: Optional[dict[str, str]] = None,
+        run_name: str | None = None,
+        tags: dict[str, str] | None = None,
         nested: bool = False,
     ) -> mlflow.ActiveRun:
         self.set_experiment()
@@ -91,8 +92,8 @@ class MLflowClient:
     @contextmanager
     def run(
         self,
-        run_name: Optional[str] = None,
-        tags: Optional[dict[str, str]] = None,
+        run_name: str | None = None,
+        tags: dict[str, str] | None = None,
     ) -> Generator[mlflow.ActiveRun, None, None]:
         """Context manager: start/end a run automatically."""
         active = self.start_run(run_name=run_name, tags=tags)
@@ -114,11 +115,11 @@ class MLflowClient:
         mlflow.log_params(safe)
         logger.debug(f"Logged {len(safe)} params")
 
-    def log_metrics(self, metrics: dict[str, float], step: Optional[int] = None) -> None:
+    def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
         mlflow.log_metrics(metrics, step=step)
         logger.debug(f"Logged metrics: {metrics}")
 
-    def log_artifact(self, local_path: str | Path, artifact_path: Optional[str] = None) -> None:
+    def log_artifact(self, local_path: str | Path, artifact_path: str | None = None) -> None:
         path = Path(local_path)
         if not path.exists():
             logger.warning(f"Artifact not found, skipping: {path}")
@@ -126,7 +127,7 @@ class MLflowClient:
         mlflow.log_artifact(str(path), artifact_path=artifact_path)
         logger.info(f"Artifact logged: {path.name}")
 
-    def log_artifacts(self, local_dir: str | Path, artifact_path: Optional[str] = None) -> None:
+    def log_artifacts(self, local_dir: str | Path, artifact_path: str | None = None) -> None:
         d = Path(local_dir)
         if not d.exists():
             logger.warning(f"Artifact directory not found, skipping: {d}")

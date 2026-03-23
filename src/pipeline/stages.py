@@ -14,11 +14,11 @@ from __future__ import annotations
 import hashlib
 import json
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.core.config_loader import ConfigLoader, PROJECT_ROOT
+from src.core.config_loader import PROJECT_ROOT, ConfigLoader
 from src.core.logger import get_logger
 
 logger = get_logger()
@@ -77,8 +77,7 @@ class EnvFingerprintStage(BaseStage):
     name = "EnvFingerprint"
 
     def run(self, ctx: dict[str, Any]) -> bool:
-        from src.core import env_fingerprint
-        from src.core import git_info
+        from src.core import env_fingerprint, git_info
 
         self._log("Collecting environment fingerprint …")
         fp = env_fingerprint.collect()
@@ -127,7 +126,7 @@ class InitWeightsManifestStage(BaseStage):
             self._warn(f"Init weights NOT found at {local_path}")
 
         manifest = {
-            "generated_utc": datetime.now(timezone.utc).isoformat(),
+            "generated_utc": datetime.now(UTC).isoformat(),
             "source": model_cfg.get("init_weights_source"),
             "repo": model_cfg.get("init_weights_repo"),
             "file": model_cfg.get("init_weights_file"),
@@ -221,8 +220,8 @@ class DatasetReportExportStage(BaseStage):
 
         if meta is None:
             # Create a minimal placeholder metadata
-            from src.dataset.metadata import DatasetMetadata
             from src.core.config_loader import ConfigLoader
+            from src.dataset.metadata import DatasetMetadata
             cfg = self.cfg.dataset
             dataset_path = PROJECT_ROOT / cfg["dataset_path"]
             meta = DatasetMetadata(
@@ -248,8 +247,8 @@ class MLflowSmokeRunStage(BaseStage):
     name = "MLflowSmokeRun"
 
     def run(self, ctx: dict[str, Any]) -> bool:
-        from src.tracking.mlflow_client import MLflowClient
         from src.tracking.artifact_manager import ArtifactManager
+        from src.tracking.mlflow_client import MLflowClient
 
         self._log("Starting MLflow framework smoke run …")
         client = MLflowClient(config_loader=self.cfg)
@@ -337,9 +336,10 @@ class TrainStage(BaseStage):
     name = "Train"
 
     def run(self, ctx: dict[str, Any]) -> bool:
+        from datetime import datetime
+
         from src.tracking.mlflow_client import MLflowClient
         from src.training.trainer import FireDetectionTrainer
-        from datetime import datetime, timezone
 
         train_cfg = self.cfg.load("training.yaml")
 
@@ -356,7 +356,7 @@ class TrainStage(BaseStage):
         client = MLflowClient(config_loader=self.cfg)
         trainer = FireDetectionTrainer(config_loader=self.cfg)
 
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         run_name = f"{train_cfg.get('run_name', 'dfire_finetune')}_{ts}"
 
         tags = {
@@ -410,13 +410,15 @@ class ModelEvaluateStage(BaseStage):
             return True
 
         # ── Build absolute data.yaml ───────────────────────────────────────
-        import tempfile, yaml as _yaml
+        import tempfile
+
+        import yaml as _yaml
         data_yaml_path = (
             PROJECT_ROOT
             / dataset_cfg["dataset_path"]
             / dataset_cfg.get("data_yaml_name", "data.yaml")
         )
-        with open(data_yaml_path, "r", encoding="utf-8") as fh:
+        with open(data_yaml_path, encoding="utf-8") as fh:
             data = _yaml.safe_load(fh) or {}
         raw_path = data.get("path", "")
         if raw_path:
@@ -473,6 +475,7 @@ class ModelEvaluateStage(BaseStage):
         # ── Log to MLflow (new eval run) ───────────────────────────────────
         try:
             import mlflow
+
             from src.tracking.mlflow_client import MLflowClient
             client = MLflowClient(config_loader=self.cfg)
             tags = {"phase": "evaluate", "split": eval_split, "weights": str(weights.name)}
@@ -536,11 +539,12 @@ class ModelEvaluateStage(BaseStage):
     ) -> list[dict]:
         """Run inference on a random sample of the split images, return per-detection records."""
         import random
-        import yaml as _yaml
+
         import numpy as np
+        import yaml as _yaml
 
         try:
-            with open(data_yaml, "r", encoding="utf-8") as fh:
+            with open(data_yaml, encoding="utf-8") as fh:
                 data = _yaml.safe_load(fh) or {}
             dataset_root = Path(data.get("path", ""))
             images_dir = dataset_root / split / "images"
@@ -602,6 +606,7 @@ class ModelRegisterStage(BaseStage):
         """Register best.pt in the MLflow Model Registry as 'fire-detection-yolo'."""
         try:
             import mlflow
+
             from src.tracking.mlflow_client import MLflowClient
         except ImportError:
             self._warn("mlflow not installed — skipping model registration.")

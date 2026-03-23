@@ -20,10 +20,10 @@ class DatasetMetadata:
     dataset_root: Path
     class_names: list[str] = field(default_factory=list)
     num_classes: int = 0
-    splits: dict[str, Optional[Path]] = field(default_factory=dict)
+    splits: dict[str, Path | None] = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
     loaded: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
 
 def load_metadata(dataset_path: Path) -> DatasetMetadata:
@@ -46,7 +46,7 @@ def load_metadata(dataset_path: Path) -> DatasetMetadata:
         return meta
 
     try:
-        with open(data_yaml, "r", encoding="utf-8") as fh:
+        with open(data_yaml, encoding="utf-8") as fh:
             raw = yaml.safe_load(fh) or {}
         meta.raw = raw
 

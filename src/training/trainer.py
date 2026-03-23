@@ -9,14 +9,14 @@ Usage (from pipeline stage):
 from __future__ import annotations
 
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import mlflow
 import yaml
 
-from src.core.config_loader import ConfigLoader, PROJECT_ROOT
+from src.core.config_loader import PROJECT_ROOT, ConfigLoader
 from src.core.logger import get_logger
 from src.model.loader import load_model
 
@@ -80,7 +80,7 @@ class FireDetectionTrainer:
         freeze  = train_cfg.get("freeze", 10)
 
         run_label = run_name or train_cfg.get("run_name", "dfire_finetune")
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         exp_name = f"{run_label}_{ts}"
 
         logger.info(
@@ -187,7 +187,7 @@ class FireDetectionTrainer:
         the yaml's parent, so we must replace it with the true absolute path before
         passing it to YOLO.train().
         """
-        with open(data_yaml_path, "r", encoding="utf-8") as fh:
+        with open(data_yaml_path, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
 
         raw_path = data.get("path", "")

@@ -26,7 +26,7 @@ class SplitStats:
     annotations: int = 0
     boxes_per_image: dict[str, float] = field(default_factory=dict)
     class_distribution: dict[str, int] = field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -61,7 +61,7 @@ class DatasetStats:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "DatasetStats":
+    def from_dict(cls, d: dict) -> DatasetStats:
         splits = {
             k: SplitStats(
                 split=v["split"],
@@ -86,7 +86,7 @@ class DatasetStats:
 
 def _analyze_split(
     split_name: str,
-    split_root: Optional[Path],
+    split_root: Path | None,
     class_names: list[str],
 ) -> SplitStats:
     stats = SplitStats(split=split_name)

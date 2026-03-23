@@ -18,8 +18,8 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
 @dataclass
 class SplitValidationResult:
     split: str
-    images_path: Optional[Path]
-    labels_path: Optional[Path]
+    images_path: Path | None
+    labels_path: Path | None
     images_found: int = 0
     labels_found: int = 0
     missing_labels: list[str] = field(default_factory=list)
@@ -80,7 +80,7 @@ def _check_image(path: Path) -> bool:
 
 def _validate_split(
     split_name: str,
-    split_root: Optional[Path],
+    split_root: Path | None,
 ) -> SplitValidationResult:
     images_path = split_root / "images" if split_root else None
     labels_path = split_root / "labels" if split_root else None

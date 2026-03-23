@@ -4,7 +4,7 @@ listing the last N MLflow runs with key params and metrics.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -42,19 +42,19 @@ def _truncate(val: str, max_len: int = 40) -> str:
     return val
 
 
-def _format_timestamp(ts_ms: Optional[int]) -> str:
+def _format_timestamp(ts_ms: int | None) -> str:
     if ts_ms is None:
         return "—"
-    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+    dt = datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
     return dt.strftime("%Y-%m-%d %H:%M UTC")
 
 
-def generate(n: int = 20, manager: Optional[ExperimentManager] = None) -> Path:
+def generate(n: int = 20, manager: ExperimentManager | None = None) -> Path:
     """Query MLflow and write experiment_summary.md. Returns the output path."""
     if manager is None:
         manager = ExperimentManager()
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     exp_name = manager._project_client.experiment_name
 
     lines: list[str] = [

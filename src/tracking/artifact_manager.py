@@ -24,7 +24,7 @@ FRAMEWORK_ARTIFACTS = [
 class ArtifactManager:
     """Manages artifact uploads to the active MLflow run."""
 
-    def __init__(self, client: Optional[MLflowClient] = None) -> None:
+    def __init__(self, client: MLflowClient | None = None) -> None:
         self._client = client or MLflowClient()
 
     def log_framework_artifacts(self) -> list[Path]:
@@ -39,8 +39,8 @@ class ArtifactManager:
         logger.info(f"Framework artifacts logged: {len(logged)}/{len(FRAMEWORK_ARTIFACTS)}")
         return logged
 
-    def log_file(self, path: Path, artifact_subdir: Optional[str] = None) -> None:
+    def log_file(self, path: Path, artifact_subdir: str | None = None) -> None:
         self._client.log_artifact(path, artifact_path=artifact_subdir)
 
-    def log_directory(self, directory: Path, artifact_subdir: Optional[str] = None) -> None:
+    def log_directory(self, directory: Path, artifact_subdir: str | None = None) -> None:
         self._client.log_artifacts(directory, artifact_path=artifact_subdir)

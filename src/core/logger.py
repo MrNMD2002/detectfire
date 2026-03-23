@@ -8,7 +8,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from src.core.config_loader import ConfigLoader, PROJECT_ROOT
+from src.core.config_loader import PROJECT_ROOT, ConfigLoader
 
 _LOGS_DIR = PROJECT_ROOT / "logs"
 _LOGS_DIR.mkdir(parents=True, exist_ok=True)

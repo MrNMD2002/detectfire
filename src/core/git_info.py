@@ -13,7 +13,7 @@ from src.core.logger import get_logger
 logger = get_logger()
 
 
-def _run(cmd: list[str], cwd: Path) -> Optional[str]:
+def _run(cmd: list[str], cwd: Path) -> str | None:
     try:
         result = subprocess.run(
             cmd,
@@ -29,7 +29,7 @@ def _run(cmd: list[str], cwd: Path) -> Optional[str]:
     return None
 
 
-def get_commit_hash(short: bool = True) -> Optional[str]:
+def get_commit_hash(short: bool = True) -> str | None:
     fmt = "--short" if short else None
     cmd = ["git", "rev-parse"]
     if fmt:
@@ -38,15 +38,15 @@ def get_commit_hash(short: bool = True) -> Optional[str]:
     return _run(cmd, PROJECT_ROOT)
 
 
-def get_branch() -> Optional[str]:
+def get_branch() -> str | None:
     return _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], PROJECT_ROOT)
 
 
-def get_status() -> Optional[str]:
+def get_status() -> str | None:
     return _run(["git", "status", "--short"], PROJECT_ROOT)
 
 
-def get_info() -> dict[str, Optional[str]]:
+def get_info() -> dict[str, str | None]:
     """Return a dict with git metadata; all values may be None if not a git repo."""
     commit = get_commit_hash(short=True)
     return {

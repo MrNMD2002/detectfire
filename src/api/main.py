@@ -18,12 +18,11 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
-
-import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -33,10 +32,10 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, field_validator
 from starlette.responses import Response
 
-from src.core.config_loader import ConfigLoader, PROJECT_ROOT
-from src.core.logger import get_logger
 from src.api.detector import FireDetector
 from src.api.stream_manager import StreamManager
+from src.core.config_loader import PROJECT_ROOT, ConfigLoader
+from src.core.logger import get_logger
 from src.monitoring import metrics as _m
 
 logger = get_logger()
@@ -272,8 +271,9 @@ async def list_cameras():
 @app.get("/api/webcams")
 async def list_webcams():
     """Scan device indices 0-9 and return available webcam devices."""
-    import cv2
     import asyncio
+
+    import cv2
 
     def _scan() -> list[dict]:
         found = []

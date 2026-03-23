@@ -9,7 +9,7 @@ import os
 import platform
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +74,7 @@ def collect() -> dict[str, Any]:
     """Collect and return the environment fingerprint."""
     gpu = _get_gpu_info()
     fingerprint: dict[str, Any] = {
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "timestamp_utc": datetime.now(UTC).isoformat(),
         "platform": {
             "system": platform.system(),
             "release": platform.release(),

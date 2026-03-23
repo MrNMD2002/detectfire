@@ -71,7 +71,7 @@ class ConfigLoader:
                     f"Config file not found: {path}. "
                     f"Expected under {self._dir}/"
                 )
-            with open(path, "r", encoding="utf-8") as fh:
+            with open(path, encoding="utf-8") as fh:
                 data = yaml.safe_load(fh) or {}
             self._validate(filename, data)
             self._cache[filename] = data

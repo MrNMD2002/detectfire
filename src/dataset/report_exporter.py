@@ -5,7 +5,7 @@ Handles missing dataset gracefully — always produces output files.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -49,11 +49,11 @@ def _format_boxes_stats(stats: dict[str, float]) -> str:
 
 def export(
     meta: DatasetMetadata,
-    validation: Optional[ValidationReport],
-    stats: Optional[DatasetStats],
+    validation: ValidationReport | None,
+    stats: DatasetStats | None,
 ) -> tuple[Path, Path]:
     """Write markdown report and JSON stats. Returns (md_path, json_path)."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # ---------------------------------------------------------------
     # Markdown report

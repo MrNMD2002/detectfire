@@ -6,14 +6,15 @@ Stage 2 — EnvFingerprint   : collects OS/Python/GPU info
 Stage 3 — InitWeightsManifest: checks best.pt exists (non-fatal if missing)
 """
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from src.core.config_loader import ConfigLoader
 from src.pipeline.stages import (
-    LoadConfigStage,
     EnvFingerprintStage,
     InitWeightsManifestStage,
+    LoadConfigStage,
 )
 
 

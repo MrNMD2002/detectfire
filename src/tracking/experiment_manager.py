@@ -18,7 +18,7 @@ logger = get_logger()
 class ExperimentManager:
     """Query and manage MLflow experiments and runs."""
 
-    def __init__(self, project_client: Optional[ProjectMLflowClient] = None) -> None:
+    def __init__(self, project_client: ProjectMLflowClient | None = None) -> None:
         self._project_client = project_client or ProjectMLflowClient()
         self._project_client.configure()
 
@@ -26,7 +26,7 @@ class ExperimentManager:
     def _client(self) -> MlflowClient:
         return MlflowClient(tracking_uri=self._project_client.tracking_uri)
 
-    def get_experiment_id(self) -> Optional[str]:
+    def get_experiment_id(self) -> str | None:
         exp = mlflow.get_experiment_by_name(self._project_client.experiment_name)
         if exp is None:
             logger.warning(
@@ -49,7 +49,7 @@ class ExperimentManager:
 
     def get_best_run(
         self, metric: str = "val_map50", ascending: bool = False
-    ) -> Optional[Run]:
+    ) -> Run | None:
         """Return the run with the best value for a given metric."""
         exp_id = self.get_experiment_id()
         if exp_id is None:
