@@ -1,0 +1,43 @@
+# ============================================================
+# Prometheus scrape configuration — Fire Detection System
+# ============================================================
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    project: "fire-detection"
+    env:     "production"
+
+rule_files:
+  - "/etc/prometheus/rules/fire_alerts.yml"
+
+scrape_configs:
+
+  # ── Prometheus self-monitoring ─────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: "prometheus"
+
+  # ── Fire Detection FastAPI ─────────────────────────────────
+  # The API runs locally (not in Docker), accessed via host.docker.internal
+  - job_name: "fire-api"
+    metrics_path: "/metrics"
+    scrape_interval: 10s       # More frequent — inference metrics change fast
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          service:     "fire-api"
+          application: "fire-detection"
+
+  # ── Evidently drift detection service ─────────────────────
+  - job_name: "evidently"
+    metrics_path: "/metrics"
+    scrape_interval: 30s       # Drift metrics change slowly
+    static_configs:
+      - targets: ["evidently:8001"]
+        labels:
+          service:     "evidently"
+          application: "drift-detection"

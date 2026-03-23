@@ -1,0 +1,4 @@
+tracking_uri: http://localhost:5000
+experiment_name: fire-detection
+minio_endpoint: http://localhost:9000
+minio_bucket: mlflow

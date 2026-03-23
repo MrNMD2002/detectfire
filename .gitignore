@@ -1,0 +1,66 @@
+# Dataset (large files, not committed)
+data/
+
+# Training runs and outputs
+runs/
+
+# Model weights (use MLflow/DVC for tracking)
+weights/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Keep the init weights manifest but not the weights
+!reports/evaluation/init_weights_manifest.json
+
+# MLflow local tracking
+mlruns/
+mlartifacts/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Docker volumes (if any local bind mounts)
+postgres_data/
+minio_data/
+
+# Claude Code local settings
+.claude/

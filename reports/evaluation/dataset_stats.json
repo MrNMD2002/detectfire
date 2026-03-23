@@ -1,0 +1,74 @@
+{
+  "generated_utc": "2026-03-23T09:40:24.328817+00:00",
+  "dataset_root": "D:\\MSA_28\\Final_project_Fire_Detection\\data\\DFire",
+  "data_yaml_present": true,
+  "loaded": true,
+  "error": null,
+  "class_names": [
+    "fire",
+    "smoke"
+  ],
+  "num_classes": 2,
+  "validation": {
+    "passed": false,
+    "global_errors": [],
+    "splits": {
+      "train": {
+        "images_found": 0,
+        "labels_found": 0,
+        "missing_labels_count": 0,
+        "corrupted_images_count": 0,
+        "empty_annotations_count": 0,
+        "empty_annotation_rate": 0.0,
+        "errors": [
+          "images/ directory not found under D:\\MSA_28\\Final_project_Fire_Detection\\data\\DFire\\data\\train\\images"
+        ]
+      },
+      "val": {
+        "images_found": 0,
+        "labels_found": 0,
+        "missing_labels_count": 0,
+        "corrupted_images_count": 0,
+        "empty_annotations_count": 0,
+        "empty_annotation_rate": 0.0,
+        "errors": [
+          "images/ directory not found under D:\\MSA_28\\Final_project_Fire_Detection\\data\\DFire\\data\\val\\images"
+        ]
+      },
+      "valid": {
+        "images_found": 0,
+        "labels_found": 0,
+        "missing_labels_count": 0,
+        "corrupted_images_count": 0,
+        "empty_annotations_count": 0,
+        "empty_annotation_rate": 0.0,
+        "errors": [
+          "No path configured for split 'valid'"
+        ]
+      },
+      "test": {
+        "images_found": 0,
+        "labels_found": 0,
+        "missing_labels_count": 0,
+        "corrupted_images_count": 0,
+        "empty_annotations_count": 0,
+        "empty_annotation_rate": 0.0,
+        "errors": [
+          "images/ directory not found under D:\\MSA_28\\Final_project_Fire_Detection\\data\\DFire\\data\\test\\images"
+        ]
+      }
+    }
+  },
+  "stats": {
+    "dataset_root": "D:\\MSA_28\\Final_project_Fire_Detection\\data\\DFire",
+    "class_names": [
+      "fire",
+      "smoke"
+    ],
+    "num_classes": 2,
+    "total_images": 0,
+    "total_boxes": 0,
+    "global_class_distribution": {},
+    "splits": {}
+  }
+}

@@ -1,0 +1,4 @@
+project_name: fire-detection
+environment: dev
+logging_level: INFO
+seed: 42

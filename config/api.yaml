@@ -1,0 +1,28 @@
+# Inference API configuration
+
+host: "0.0.0.0"
+port: 8000
+
+# Model — dùng fine-tuned best.pt (mAP50=0.754)
+# Đổi sang "checkpoints/best.pt" nếu muốn dùng model gốc
+model_path: "runs/train/dfire_finetune_20260323_045812_20260323_045812/weights/best.pt"
+model_fallback_path: "checkpoints/best.pt"
+
+# Detection thresholds
+# 0.25 → nhiều false positive; tăng lên 0.40 để lọc bớt nhận diện sai
+# Nếu bỏ sót quá nhiều thì giảm xuống 0.30
+confidence_threshold: 0.40
+iou_threshold: 0.50
+
+# Streaming
+target_fps: 15          # Max FPS gửi lên dashboard
+jpeg_quality: 92        # JPEG encode quality (1-95)
+frame_width: 1280       # Resize frame trước khi detect
+frame_height: 720
+
+# Alert
+alert_cooldown_sec: 3   # Tránh spam alert liên tục
+
+# Authentication — bearer token for write endpoints (POST/PUT/DELETE).
+# Set API_KEY in .env to enable. Leave empty/null to disable (dev mode only).
+api_key: null

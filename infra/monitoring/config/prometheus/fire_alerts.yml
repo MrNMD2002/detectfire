@@ -1,0 +1,170 @@
+# ============================================================
+# Prometheus Alert Rules — Fire Detection System
+# ============================================================
+
+groups:
+
+  # ── Inference Performance ──────────────────────────────────
+  - name: fire_inference_alerts
+    interval: 1m
+    rules:
+
+      - alert: HighInferenceLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(fire_inference_latency_seconds_bucket[5m])
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: inference
+        annotations:
+          summary: "YOLO inference p95 latency > 500ms"
+          description: "95th-percentile inference latency is {{ $value | humanizeDuration }}. GPU may be saturated."
+          action: "Check GPU utilization, reduce camera count or batch size."
+
+      - alert: CriticalInferenceLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(fire_inference_latency_seconds_bucket[5m])
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: critical
+          component: inference
+        annotations:
+          summary: "YOLO inference critically slow: {{ $value | humanizeDuration }}"
+          description: "Inference latency exceeds 2 seconds. Real-time detection severely degraded."
+          action: "Immediate action: check GPU, reduce streams, restart API."
+
+      - alert: HighInferenceErrorRate
+        expr: |
+          rate(fire_inference_errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+          component: inference
+        annotations:
+          summary: "High inference error rate: {{ $value | humanize }} errors/s"
+          description: "YOLO inference is producing errors. Model or input pipeline may be broken."
+          action: "Check API logs: docker logs fire-api, restart if needed."
+
+  # ── Camera & Detection ────────────────────────────────────
+  - name: fire_detection_alerts
+    interval: 1m
+    rules:
+
+      - alert: NoCamerasActive
+        expr: fire_active_cameras == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: cameras
+        annotations:
+          summary: "No active camera streams"
+          description: "All camera streams have disconnected for 5+ minutes."
+          action: "Check camera connectivity, restart streams via API /api/cameras."
+
+      - alert: FireDetectedSurge
+        expr: |
+          rate(fire_detections_total{class_name="fire"}[2m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+          component: detection
+        annotations:
+          summary: "Fire detection surge: {{ $value | humanize }} detections/s"
+          description: "Abnormally high fire detection rate. May indicate real fire or false positive surge."
+          action: "Review camera feeds immediately. Check confidence threshold in /api/config."
+
+      - alert: LowConfidenceDetections
+        expr: |
+          (
+            rate(fire_detection_confidence_sum[10m]) /
+            rate(fire_detection_confidence_count[10m])
+          ) < 0.35
+        for: 10m
+        labels:
+          severity: warning
+          component: detection
+        annotations:
+          summary: "Average detection confidence dropping: {{ $value | humanizePercentage }}"
+          description: "Model confidence is below 35% on average. Consider retraining or checking camera quality."
+          action: "Review recent detections, check lighting conditions, consider model update."
+
+  # ── API Performance ───────────────────────────────────────
+  - name: fire_api_alerts
+    interval: 1m
+    rules:
+
+      - alert: APIHighErrorRate
+        expr: |
+          rate(fire_api_requests_total{status=~"5.."}[5m]) /
+          rate(fire_api_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API error rate > 5%: {{ $value | humanizePercentage }}"
+          description: "Server-side errors are too frequent. Check API logs."
+
+      - alert: APIDown
+        expr: up{job="fire-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Fire Detection API is down"
+          description: "Prometheus cannot reach the API /metrics endpoint."
+          action: "Restart: python -m src.api.main"
+
+  # ── Drift Detection (Evidently) ──────────────────────────
+  - name: fire_drift_alerts
+    interval: 2m
+    rules:
+
+      - alert: ConfidenceDriftDetected
+        expr: evidently_data_drift_detected == 1
+        for: 10m
+        labels:
+          severity: warning
+          component: drift
+        annotations:
+          summary: "Confidence score drift detected"
+          description: "Evidently has detected distribution drift in model confidence scores. Model may be degrading."
+          action: "Review Evidently drift reports at http://localhost:8001/reports. Consider retraining."
+
+      - alert: HighDriftScore
+        expr: evidently_drift_score > 0.3
+        for: 15m
+        labels:
+          severity: critical
+          component: drift
+        annotations:
+          summary: "High drift score: {{ $value | humanizePercentage }}"
+          description: "Drift score exceeds 30%. Model performance may be significantly degraded."
+          action: "Schedule model retraining with recent data."
+
+      - alert: MultipleFeaturessDrifting
+        expr: evidently_drifted_features_count >= 2
+        for: 10m
+        labels:
+          severity: critical
+          component: drift
+        annotations:
+          summary: "{{ $value }} features drifting simultaneously"
+          description: "Multiple confidence distribution features are drifting. Likely environmental or camera change."
+          action: "Investigate data source, update reference data or retrain model."
+
+      - alert: EvidentlyDown
+        expr: up{job="evidently"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: drift
+        annotations:
+          summary: "Evidently drift service is down"
+          description: "Cannot reach Evidently for drift monitoring."
+          action: "Restart: cd infra/monitoring && docker compose up -d evidently"

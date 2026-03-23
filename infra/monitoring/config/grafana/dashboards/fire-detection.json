@@ -1,0 +1,413 @@
+{
+  "id": null,
+  "uid": "fire-detection-main",
+  "title": "Fire Detection — ML Monitoring",
+  "description": "Real-time monitoring of the Fire Detection YOLO inference pipeline",
+  "tags": ["fire-detection", "ml", "yolo"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "row",
+      "title": "System Overview",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Active Cameras",
+      "description": "Number of camera streams currently active",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": 0 },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [{ "expr": "fire_active_cameras", "legendFormat": "cameras", "refId": "A" }]
+    },
+
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Detections (last 1h)",
+      "description": "Total fire + smoke detections in the last hour",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "increase(fire_detections_total[1h])", "legendFormat": "total", "refId": "A" }]
+    },
+
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Inference p95 Latency",
+      "description": "95th percentile YOLO inference latency",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": 0 },
+              { "color": "yellow", "value": 0.2 },
+              { "color": "red",    "value": 0.5 }
+            ]
+          },
+          "unit": "s",
+          "decimals": 3
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(fire_inference_latency_seconds_bucket[5m]))",
+        "legendFormat": "p95", "refId": "A"
+      }]
+    },
+
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Frames Processed (last 1h)",
+      "description": "Total frames processed by YOLO in the last hour",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short"
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [{ "expr": "increase(fire_frames_processed_total[1h])", "legendFormat": "frames", "refId": "A" }]
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Drift Score",
+      "description": "Current Evidently drift score (0=no drift, 1=full drift)",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": 0 },
+              { "color": "yellow", "value": 0.2 },
+              { "color": "red",    "value": 0.3 }
+            ]
+          },
+          "unit": "percentunit",
+          "decimals": 2
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "evidently_drift_score", "legendFormat": "drift", "refId": "A" }]
+    },
+
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Drift Detected",
+      "description": "Evidently drift detection status",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red",   "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "0": { "text": "No Drift" }, "1": { "text": "DRIFT!" } }, "type": "value" }
+          ]
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "expr": "evidently_data_drift_detected", "legendFormat": "drift", "refId": "A" }]
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Detection Metrics",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "collapsed": false
+    },
+
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Detections per Minute — by Class",
+      "description": "Rate of fire and smoke detections over time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "fire" },  "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "smoke" }, "properties": [{ "id": "color", "value": { "fixedColor": "#B0B0B0", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(fire_detections_total{class_name=\"fire\"}[1m]) * 60",  "legendFormat": "fire",  "refId": "A" },
+        { "expr": "rate(fire_detections_total{class_name=\"smoke\"}[1m]) * 60", "legendFormat": "smoke", "refId": "B" }
+      ]
+    },
+
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Average Detection Confidence — by Class",
+      "description": "Mean confidence score per class (key drift signal)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "fire" },  "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "smoke" }, "properties": [{ "id": "color", "value": { "fixedColor": "#B0B0B0", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "rate(fire_detection_confidence_sum{class_name=\"fire\"}[5m]) / rate(fire_detection_confidence_count{class_name=\"fire\"}[5m])",
+          "legendFormat": "fire", "refId": "A"
+        },
+        {
+          "expr": "rate(fire_detection_confidence_sum{class_name=\"smoke\"}[5m]) / rate(fire_detection_confidence_count{class_name=\"smoke\"}[5m])",
+          "legendFormat": "smoke", "refId": "B"
+        }
+      ]
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Inference Performance",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "collapsed": false
+    },
+
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "YOLO Inference Latency (p50 / p95 / p99)",
+      "description": "YOLO inference latency percentiles over time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "s",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(fire_inference_latency_seconds_bucket[5m]))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, rate(fire_inference_latency_seconds_bucket[5m]))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, rate(fire_inference_latency_seconds_bucket[5m]))", "legendFormat": "p99", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "API Request Rate & Error Rate",
+      "description": "HTTP request throughput and error rates",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "reqps",
+          "custom": { "lineWidth": 2 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(fire_api_requests_total[1m])", "legendFormat": "req/s — {{method}} {{endpoint}}", "refId": "A" },
+        { "expr": "rate(fire_api_requests_total{status=~\"5..\"}[1m])", "legendFormat": "5xx errors/s", "refId": "B" },
+        { "expr": "rate(fire_inference_errors_total[1m])", "legendFormat": "inference errors/s", "refId": "C" }
+      ]
+    },
+
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Detections per Frame (average)",
+      "description": "Average number of objects detected per processed frame",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 8 }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{
+        "expr": "rate(fire_detections_per_frame_sum[5m]) / rate(fire_detections_per_frame_count[5m])",
+        "legendFormat": "avg detections/frame", "refId": "A"
+      }]
+    },
+
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Frames Processed per Second",
+      "description": "Throughput of the YOLO inference pipeline",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "fps",
+          "custom": { "lineWidth": 2, "fillOpacity": 8 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{
+        "expr": "rate(fire_frames_processed_total[1m])",
+        "legendFormat": "FPS — {{camera_id}}", "refId": "A"
+      }]
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Drift Monitoring (Evidently)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "collapsed": false
+    },
+
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Drift Score over Time",
+      "description": "Evidently overall drift score (confidence distribution shift)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#FF9830", "mode": "fixed" },
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": 0 },
+              { "color": "yellow", "value": 0.2 },
+              { "color": "red",    "value": 0.3 }
+            ]
+          }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{ "expr": "evidently_drift_score", "legendFormat": "drift score", "refId": "A" }]
+    },
+
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Drifted Features Count",
+      "description": "Number of features with detected drift over time",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#F2495C", "mode": "fixed" },
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",   "value": 2 }
+            ]
+          }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" } },
+      "targets": [{ "expr": "evidently_drifted_features_count", "legendFormat": "drifted features", "refId": "A" }]
+    },
+
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Feature-level Drift Status",
+      "description": "Drift detected (1) or not (0) per individual feature",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 40 },
+      "datasource": { "uid": "prometheus-datasource" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "short",
+          "min": 0, "max": 1,
+          "custom": { "lineWidth": 1, "fillOpacity": 20 }
+        }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right" } },
+      "targets": [{ "expr": "evidently_feature_drift", "legendFormat": "{{feature_name}}", "refId": "A" }]
+    }
+
+  ]
+}

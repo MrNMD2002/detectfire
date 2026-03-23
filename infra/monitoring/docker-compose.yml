@@ -1,0 +1,135 @@
+version: "3.8"
+
+# ============================================================
+# Fire Detection — Monitoring Stack
+# ============================================================
+# Services: Prometheus | Grafana | Evidently
+#
+# Prerequisites:
+#   1. Start MLflow infra first:  cd infra/mlflow && docker compose up -d
+#   2. Start Fire API locally:    python -m src.api.main
+#   3. Then:                      docker compose up -d
+#
+# Prometheus scrapes:
+#   - host.docker.internal:8000/metrics  (local FastAPI)
+#   - evidently:8001/metrics             (same network)
+#
+# URLs:
+#   Grafana:   http://localhost:3000   (admin / admin)
+#   Prometheus: http://localhost:9090
+#   Evidently:  http://localhost:8001
+# ============================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # PROMETHEUS
+  # ──────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fire-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux compat for host access
+    networks:
+      - monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ──────────────────────────────────────────────────────────
+  # GRAFANA
+  # ──────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fire-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ──────────────────────────────────────────────────────────
+  # EVIDENTLY — Drift Detection Service
+  # ──────────────────────────────────────────────────────────
+  evidently:
+    build:
+      context: ./evidently
+      dockerfile: Dockerfile
+    container_name: fire-evidently
+    ports:
+      - "8001:8001"
+    volumes:
+      - evidently_data:/app/data
+      - evidently_reports:/app/reports
+      - evidently_reference:/app/reference
+    environment:
+      - EVIDENTLY_DRIFT_THRESHOLD=0.1
+      - EVIDENTLY_MIN_SAMPLES=50
+    networks:
+      - monitoring
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ──────────────────────────────────────────────────────────
+# VOLUMES
+# ──────────────────────────────────────────────────────────
+volumes:
+  prometheus_data:
+    driver: local
+    name: fire_prometheus_data
+  grafana_data:
+    driver: local
+    name: fire_grafana_data
+  evidently_data:
+    driver: local
+    name: fire_evidently_data
+  evidently_reports:
+    driver: local
+    name: fire_evidently_reports
+  evidently_reference:
+    driver: local
+    name: fire_evidently_reference
+
+# ──────────────────────────────────────────────────────────
+# NETWORKS
+# ──────────────────────────────────────────────────────────
+networks:
+  monitoring:
+    driver: bridge
+    name: fire-monitoring-net

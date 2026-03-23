@@ -1,0 +1,32 @@
+# ── Core ──────────────────────────────────────────────────────────────────────
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# ── MLflow + artifact store ────────────────────────────────────────────────────
+mlflow>=2.13.0
+boto3>=1.34          # S3 / MinIO artifact store
+psycopg2-binary>=2.9 # Postgres backend store
+
+# ── Image handling (dataset validator uses PIL for corruption check) ───────────
+Pillow>=10.0
+
+# ── Dataset download (optional, used in Phase Train) ─────────────────────────
+# roboflow>=1.1
+
+# ── ML / YOLO runtime (Phase Train only — NOT required for framework phase) ───
+# torch>=2.0
+# torchvision>=0.15
+# ultralytics>=8.2   # YOLOv8/v10 runtime
+
+# ── Inference API ──────────────────────────────────────────────────────────────
+fastapi>=0.111
+uvicorn[standard]>=0.29
+opencv-python>=4.9          # RTSP + webcam capture (mirrors MBFS_Stream capture role)
+python-multipart>=0.0.9     # FastAPI file upload support
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+prometheus-client>=0.20     # Prometheus metrics exposition (/metrics endpoint)
+httpx>=0.27                 # EvidentlyClient HTTP calls (async-compatible)
+
+# ── Dev / testing ──────────────────────────────────────────────────────────────
+pytest>=8.0

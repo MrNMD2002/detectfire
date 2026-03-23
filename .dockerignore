@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# CI/CD
+.github/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Dev
+.venv/
+venv/
+.env
+
+# Large data/model files (mounted at runtime)
+data/
+runs/
+Model/
+mlruns/
+logs/
+
+# Reports (generated at runtime)
+reports/
+
+# Docker infra (not needed inside the API container)
+infra/
+
+# Docs
+*.md

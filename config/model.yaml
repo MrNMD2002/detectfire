@@ -1,0 +1,8 @@
+init_weights_source: huggingface
+init_weights_repo: TommyNgx/YOLOv10-Fire-and-Smoke-Detection
+init_weights_file: best.pt
+# Stage 2: dùng best.pt từ Stage 1 làm init weights (mAP50=0.754)
+# Đổi lại "checkpoints/best.pt" nếu muốn train từ đầu
+init_weights_local_path: runs/train/dfire_finetune_20260304_040651_20260304_040651/weights/best.pt
+model_family: yolov10
+note: "YOLOv10 weights; do not load in framework phase"

@@ -1,0 +1,12 @@
+{
+  "generated_utc": "2026-03-23T09:40:24.260988+00:00",
+  "source": "huggingface",
+  "repo": "TommyNgx/YOLOv10-Fire-and-Smoke-Detection",
+  "file": "best.pt",
+  "local_path": "D:\\MSA_28\\Final_project_Fire_Detection\\runs\\train\\dfire_finetune_20260304_040651_20260304_040651\\weights\\best.pt",
+  "present": true,
+  "size_bytes": 137973723,
+  "sha256": "324e68eb70ac409f4cd825a41eeaca01d25418a82687d8a11d51e3cf6b66958c",
+  "model_family": "yolov10",
+  "note": "YOLOv10 weights; do not load in framework phase"
+}

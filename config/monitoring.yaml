@@ -1,0 +1,24 @@
+# Monitoring stack configuration
+# URLs can be overridden by environment variables at runtime.
+
+prometheus_url: "http://localhost:9090"
+grafana_url:    "http://localhost:3000"
+evidently_url:  "http://localhost:8001"
+
+# Evidently — drift detection
+evidently_capture_enabled:     true   # Send a sample of frames to Evidently
+evidently_capture_sample_rate: 0.05   # 5% of frames (low overhead on inference thread)
+evidently_min_samples:         100    # Min production samples before triggering analysis
+evidently_drift_threshold:     0.1    # PSI / KS threshold passed to Evidently
+
+# Alert thresholds (used by fire_alerts.yml in Prometheus)
+inference_latency_p95_ms:  500    # Alert if 95th-pct inference > 500 ms
+api_error_rate_threshold:  0.05   # Alert if error rate > 5%
+min_active_cameras:        0      # Alert if active cameras drops below this
+
+# Evaluation (ModelEvaluateStage)
+eval_split:            "test"    # YOLO split to evaluate on: train | val | test
+eval_conf:             0.25      # Confidence threshold for evaluation
+eval_iou:              0.50      # IoU threshold for evaluation
+eval_reference_sample: 100       # Max frames to sample for Evidently reference data
+eval_workers: 0                  # DataLoader workers for evaluation (0=main process, tránh OOM sau train)

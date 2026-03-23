@@ -1,0 +1,16 @@
+# Active dataset for Phase Train experiments
+# Switch between datasets by changing dataset_path (and data_yaml_name if needed).
+
+# --- D-Fire (current) ---
+dataset_source: local
+dataset_name: DFire
+dataset_path: data/DFire
+data_yaml_name: data.yaml   # file inside dataset_path
+
+# --- Roboflow fire-dji3l v4 (legacy) ---
+# dataset_source: roboflow
+# dataset_project: fire-dji3l
+# dataset_version: v4
+# dataset_format: yolov8
+# dataset_path: data/roboflow_v4
+# data_yaml_name: data.yaml

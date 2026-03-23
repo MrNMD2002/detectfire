@@ -1,0 +1,53 @@
+# Training configuration — Phase Train
+# Kick off with a small run (epochs: 5) to verify pipeline + see real MLflow metrics.
+# Bump epochs to 50+ for a serious fine-tuning run.
+
+enabled: false          # set false to skip TrainStage and run framework-only
+
+# MLflow run name (auto-suffixed with timestamp at runtime)
+run_name: dfire_finetune
+
+# ── Resume interrupted training ───────────────────────────────────────────────
+# Set resume: true to continue from the last checkpoint instead of starting over.
+# resume_from: explicit path to last.pt (relative to PROJECT_ROOT).
+#              Leave null to auto-detect the most recent last.pt in runs/train/.
+resume: false
+resume_from: null
+
+# ── Epochs & size ────────────────────────────────────────────────────────────
+epochs: 20              # Stage 2: train dài hơn để model hội tụ tốt hơn
+imgsz: 320              # giảm 416→320 để tăng tốc (~2x nhanh hơn mỗi step)
+batch: 8                # tăng 2→8 để giảm 4x số steps/epoch (VRAM ~2.7GB)
+
+# ── Device ───────────────────────────────────────────────────────────────────
+device: "0"             # GPU 0; change to "cpu" if no CUDA
+workers: 4              # tăng lên để load data nhanh hơn
+
+# ── Fine-tuning strategy (progressive freeze) ────────────────────────────────
+# Stage 1 (done):    head-only — freeze=10, lr0=0.0005
+# Stage 2 (this):    unfreeze last 5 backbone blocks + lower LR
+# Stage 3 (future):  full unfreeze at very low LR
+freeze: 5               # mở thêm 5 block backbone để học feature tốt hơn
+optimizer: AdamW
+lr0: 0.0002             # giảm LR vì backbone đã học từ Stage 1
+lrf: 0.01               # final LR = lr0 * lrf = 0.000002
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 2.0
+warmup_momentum: 0.8
+
+# ── Augmentation (lighter than scratch training) ─────────────────────────────
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+flipud: 0.0
+fliplr: 0.5
+mosaic: 1.0
+mixup: 0.0
+
+# ── Early stopping ───────────────────────────────────────────────────────────
+patience: 20            # stop if no improvement for N epochs
+
+# ── Output ───────────────────────────────────────────────────────────────────
+project: runs/train     # relative to PROJECT_ROOT
+save_period: -1         # -1 = only save best + last (saves disk space)
