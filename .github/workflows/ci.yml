@@ -5,7 +5,12 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main]
-  workflow_dispatch:   # Cho phép chạy thủ công từ GitHub UI
+  workflow_dispatch:
+
+# Force bash shell on all jobs (Windows runner defaults to PowerShell)
+defaults:
+  run:
+    shell: bash
 
 jobs:
   # ────────────────────────────────────────────────────────────────────────────
@@ -26,7 +31,6 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────────────────
   # Job 2 — Unit tests + coverage
-  # Self-hosted runner: có đủ deps, không cần cài torch lại (đã có trên máy)
   # ────────────────────────────────────────────────────────────────────────────
   test:
     name: Tests + Coverage
@@ -36,35 +40,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install framework dependencies
+      - name: Install dependencies
         run: |
           pip install -r requirements.txt -q
           pip install pytest-cov -q
           pip uninstall pytest-asyncio -y 2>/dev/null || true
 
-      - name: Show python env
-        run: |
-          python --version
-          pip show pytest pytest-cov
-          echo "CWD: $(pwd)"
-          echo "WORKSPACE: ${{ github.workspace }}"
-
       - name: Run tests with coverage
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        working-directory: ${{ github.workspace }}
-        run: python -m pytest tests/ -v --tb=long --cov=src --cov-report=term-missing --cov-report=xml:coverage.xml
+        run: python -m pytest tests/ -v --tb=short --cov=src --cov-report=term-missing --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
-          path: ${{ github.workspace }}/coverage.xml
+          path: coverage.xml
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 3 — Pipeline check
-  # Self-hosted: có MLflow local → chạy được tất cả 12 stages (training=disabled)
+  # Job 3 — Pipeline check (12 stages, training disabled)
   # ────────────────────────────────────────────────────────────────────────────
   pipeline-check:
     name: Pipeline check (12 stages, training disabled)
@@ -74,10 +67,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install framework dependencies
+      - name: Install dependencies
         run: pip install -r requirements.txt -q
 
-      - name: Run full pipeline (training disabled)
+      - name: Run full pipeline
         run: python -m src.pipeline.orchestrator
 
       - name: Upload pipeline reports
@@ -89,7 +82,6 @@ jobs:
 
   # ────────────────────────────────────────────────────────────────────────────
   # Job 4 — Build Summary
-  # Luôn chạy cuối để tổng kết kết quả tất cả jobs
   # ────────────────────────────────────────────────────────────────────────────
   build-summary:
     name: Build Summary
@@ -98,7 +90,7 @@ jobs:
     if: always()
 
     steps:
-      - name: Print pipeline results
+      - name: Print results
         run: |
           echo "========================================"
           echo "  CI PIPELINE SUMMARY"
@@ -109,18 +101,17 @@ jobs:
           echo "========================================"
 
       - name: Mark success
-        if: |
+        if: >
           needs.lint.result == 'success' &&
           needs.test.result == 'success' &&
           needs.pipeline-check.result == 'success'
-        run: |
-          echo " ALL CHECKS PASSED — ready to merge/deploy."
+        run: echo "ALL CHECKS PASSED"
 
       - name: Mark failure
-        if: |
+        if: >
           needs.lint.result != 'success' ||
           needs.test.result != 'success' ||
           needs.pipeline-check.result != 'success'
         run: |
-          echo " PIPELINE FAILED — check logs above."
+          echo "PIPELINE FAILED"
           exit 1
