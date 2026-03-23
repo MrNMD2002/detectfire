@@ -549,11 +549,21 @@ actions/checkout
 docker pull ghcr.io/mrnmd2002/detectfire/fire-detection-api:latest
 ```
 
-**Run the published image** (mount model weights at runtime):
+**Run the published image** (mount model weights and config at runtime):
 ```bash
+# CPU
 docker run -d \
   -p 8000:8000 \
-  -v /path/to/best.pt:/app/checkpoints/best.pt \
+  -v /path/to/Model:/app/Model:ro \
+  -v /path/to/config:/app/config:ro \
+  -e API_KEY=your_key \
+  ghcr.io/mrnmd2002/detectfire/fire-detection-api:latest
+
+# GPU (requires NVIDIA Container Toolkit)
+docker run -d --gpus all \
+  -p 8000:8000 \
+  -v /path/to/Model:/app/Model:ro \
+  -v /path/to/config:/app/config:ro \
   -e API_KEY=your_key \
   ghcr.io/mrnmd2002/detectfire/fire-detection-api:latest
 ```
