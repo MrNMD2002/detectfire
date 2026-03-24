@@ -11,6 +11,10 @@ evidently_capture_sample_rate: 0.05   # 5% of frames (low overhead on inference 
 evidently_min_samples:         100    # Min production samples before triggering analysis
 evidently_drift_threshold:     0.1    # PSI / KS threshold passed to Evidently
 
+# Telegram alerts
+telegram_enabled:      true   # set false to disable even if token is configured
+telegram_cooldown_sec: 60     # min seconds between alerts per class (fire/smoke)
+
 # Alert thresholds (used by fire_alerts.yml in Prometheus)
 inference_latency_p95_ms:  500    # Alert if 95th-pct inference > 500 ms
 api_error_rate_threshold:  0.05   # Alert if error rate > 5%

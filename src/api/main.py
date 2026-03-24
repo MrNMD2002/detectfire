@@ -37,6 +37,7 @@ from src.api.stream_manager import StreamManager
 from src.core.config_loader import PROJECT_ROOT, ConfigLoader
 from src.core.logger import get_logger
 from src.monitoring import metrics as _m
+from src.monitoring.telegram_notifier import TelegramNotifier
 
 logger = get_logger()
 
@@ -45,14 +46,15 @@ _STATIC_DIR = Path(__file__).parent / "static"
 # ---------------------------------------------------------------------------
 # Global singletons (initialised in lifespan)
 # ---------------------------------------------------------------------------
-_detector: FireDetector | None = None
-_manager:  StreamManager | None = None
-_api_key:  str | None = None       # None = authentication disabled
+_detector:  FireDetector | None = None
+_manager:   StreamManager | None = None
+_notifier:  TelegramNotifier | None = None
+_api_key:   str | None = None       # None = authentication disabled
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _detector, _manager, _api_key
+    global _detector, _manager, _notifier, _api_key
 
     cfg     = ConfigLoader()
     api_cfg = cfg.load("api.yaml")
@@ -75,7 +77,17 @@ async def lifespan(app: FastAPI):
         "iou_threshold": str(api_cfg.get("iou_threshold", 0.45)),
     })
 
-    _manager = StreamManager(_detector, api_cfg, persist_path=PROJECT_ROOT / "data" / "cameras.json")
+    mon_cfg  = cfg.load("monitoring.yaml")
+    _notifier = TelegramNotifier(
+        cooldown_sec=int(mon_cfg.get("telegram_cooldown_sec", 60)),
+    ) if mon_cfg.get("telegram_enabled", True) else None
+
+    _manager = StreamManager(
+        _detector,
+        api_cfg,
+        persist_path=PROJECT_ROOT / "data" / "cameras.json",
+        notifier=_notifier,
+    )
     _manager.set_loop(asyncio.get_running_loop())
     _manager.restore_cameras()   # auto-reconnect cameras saved from previous session
 
@@ -261,6 +273,28 @@ async def update_config(req: ConfigUpdateRequest, _: None = Depends(_require_aut
     _detector.conf = conf
     logger.info(f"[API] Confidence threshold updated → {conf:.2f}")
     return {"confidence_threshold": conf}
+
+
+@app.get("/api/telegram/cooldown")
+async def get_telegram_cooldown():
+    """Return current Telegram alert cooldown in seconds."""
+    cooldown = _notifier.cooldown_sec if _notifier else 60
+    enabled  = _notifier.enabled if _notifier else False
+    return {"cooldown_sec": cooldown, "enabled": enabled}
+
+
+class TelegramCooldownRequest(BaseModel):
+    cooldown_sec: int
+
+
+@app.put("/api/telegram/cooldown")
+async def set_telegram_cooldown(req: TelegramCooldownRequest):
+    """Update Telegram alert cooldown in seconds (live, no restart needed)."""
+    value = max(5, min(3600, req.cooldown_sec))
+    if _notifier:
+        _notifier.cooldown_sec = value
+        logger.info(f"[API] Telegram cooldown updated → {value}s")
+    return {"cooldown_sec": value}
 
 
 @app.get("/api/cameras")

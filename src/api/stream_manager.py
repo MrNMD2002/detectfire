@@ -35,6 +35,7 @@ import numpy as np
 
 from src.api.detector import FireDetector
 from src.core.logger import get_logger
+from src.monitoring.telegram_notifier import TelegramNotifier
 
 logger = get_logger()
 
@@ -48,8 +49,12 @@ _FFMPEG_RTSP_OPTIONS = (
     "|fflags;nobuffer"
     "|flags;low_delay"
     "|framedrop;1"
-    "|max_delay;0"
-    "|stimeout;5000000"   # 5 s socket timeout
+    "|max_delay;500000"
+    "|stimeout;10000000"
+    "|buffer_size;1048576"
+    "|hwaccel;cuda"          # NVDEC — RTX 3050 hỗ trợ H.265 decode
+    "|probesize;10000000"    # cho FFmpeg thêm thời gian phân tích stream
+    "|analyzeduration;5000000"
 )
 
 # ── BGR colours for annotation (fire=red-orange, smoke=gray) ──────────────
@@ -231,6 +236,7 @@ class CameraStream:
         detector:   FireDetector,
         config:     dict,
         reconnect:  ReconnectConfig | None = None,
+        notifier:   TelegramNotifier | None = None,
     ) -> None:
         self.id     = camera_id
         self.name   = name
@@ -239,6 +245,7 @@ class CameraStream:
         self._detector  = detector
         self._config    = config
         self._reconnect = reconnect or ReconnectConfig()
+        self._notifier  = notifier
 
         # State (AtomicBool equivalent)
         self._stop_event  = threading.Event()
@@ -470,6 +477,10 @@ class CameraStream:
                 # Resize
                 frame = cv2.resize(frame, (w, h))
 
+                # Mirror webcam horizontally (webcams are naturally flipped)
+                if not isinstance(self.source, str):
+                    frame = cv2.flip(frame, 1)
+
                 # Submit frame to YOLO worker (non-blocking, overwrite if busy)
                 with self._pending_yolo_lock:
                     self._pending_yolo_frame = frame
@@ -526,6 +537,15 @@ class CameraStream:
                             if _now - _last >= _cooldown:
                                 ALERTS_TOTAL.labels(class_name=cls_name, camera_id=self.id).inc()
                                 self._last_alert_time[cls_name] = _now
+                                # Telegram alert — send annotated frame + confidence
+                                if self._notifier:
+                                    best_conf = max(
+                                        (d["confidence"] for d in detections if d["class"] == cls_name),
+                                        default=0.0,
+                                    )
+                                    self._notifier.send_alert(
+                                        cls_name, best_conf, self.name, frame=annotated
+                                    )
                 except ImportError:
                     pass
 
@@ -553,8 +573,8 @@ class CameraStream:
             cap = cv2.VideoCapture()
             try:
                 open_params = [
-                    int(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC), 8_000,
-                    int(cv2.CAP_PROP_READ_TIMEOUT_MSEC), 5_000,
+                    int(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC), 15_000,
+                    int(cv2.CAP_PROP_READ_TIMEOUT_MSEC), 10_000,
                 ]
                 cap.open(self.source, cv2.CAP_FFMPEG, open_params)
             except (TypeError, cv2.error):
@@ -580,7 +600,7 @@ class CameraStream:
         # Test-read: retry a few times — Dahua/RTSP cameras need time to negotiate
         # before the first frame arrives. Check stop_event each iteration.
         ret = False
-        for _ in range(15):
+        for _ in range(50):   # 50 × 0.2s = 10s — enough for slow Dahua/public-IP cams
             if self._stop_event.is_set():
                 cap.release()
                 return None
@@ -645,11 +665,18 @@ class CameraStream:
 class StreamManager:
     """Manages a pool of CameraStream objects."""
 
-    def __init__(self, detector: FireDetector, config: dict, persist_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        detector: FireDetector,
+        config: dict,
+        persist_path: Path | None = None,
+        notifier: TelegramNotifier | None = None,
+    ) -> None:
         self._detector = detector
         self._config   = config
         self._streams: dict[str, CameraStream] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._notifier = notifier
         # Default: data/cameras.json relative to working directory
         self._persist_path: Path = persist_path or Path("data/cameras.json")
 
@@ -708,6 +735,7 @@ class StreamManager:
             detector  = self._detector,
             config    = self._config,
             reconnect = reconnect,
+            notifier  = self._notifier,
         )
         stream.start(self._loop)
         self._streams[camera_id] = stream
