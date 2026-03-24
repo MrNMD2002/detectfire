@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fire Detection — MLOps Pipeline | MSA-28</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fire1: #ff4500;
+    --fire2: #ff6a00;
+    --fire3: #ff9e00;
+    --ember: #ffcc44;
+    --dark0: #080a0c;
+    --dark1: #0d1117;
+    --dark2: #161b22;
+    --dark3: #1e2530;
+    --dark4: #252d3a;
+    --text: #e8eaed;
+    --text-dim: #8b97a8;
+    --text-muted: #546375;
+    --accent-green: #39d353;
+    --accent-blue: #58a6ff;
+    --accent-purple: #bc8cff;
+    --glow: rgba(255,69,0,0.35);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--dark0);
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    color: var(--text);
+  }
+
+  /* ── CANVAS PARTICLES ── */
+  #particles {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── SLIDE DECK ── */
+  .deck {
+    position: fixed;
+    width: 1440px; height: 810px;
+    top: 50%; left: 50%;
+    transform-origin: center center;
+    z-index: 1;
+    /* JS sets transform: translate(-50%,-50%) scale(N) */
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 52px 80px;
+    opacity: 0;
+    transform: translateX(80px);
+    transition: opacity .55s cubic-bezier(.4,0,.2,1), transform .55s cubic-bezier(.4,0,.2,1);
+    pointer-events: none;
+  }
+  .slide.active {
+    opacity: 1; transform: translateX(0);
+    pointer-events: all;
+  }
+  .slide.exit {
+    opacity: 0; transform: translateX(-80px);
+  }
+
+  /* ── GRID OVERLAY ── */
+  .slide::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,69,0,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,69,0,.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+
+  /* ── NAV ── */
+  #nav {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .nav-btn {
+    width: 40px; height: 40px;
+    border: 1px solid rgba(255,69,0,.4);
+    background: rgba(255,69,0,.08);
+    color: var(--fire2);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  }
+  .nav-btn:hover { background: rgba(255,69,0,.25); border-color: var(--fire2); }
+  #counter {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; color: var(--text-dim);
+    letter-spacing: 2px;
+    min-width: 70px; text-align: center;
+  }
+  .pip-row {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .pip {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--dark4);
+    border: 1px solid var(--text-muted);
+    transition: all .25s;
+    cursor: pointer;
+  }
+  .pip.on { background: var(--fire2); border-color: var(--fire2); box-shadow: 0 0 6px var(--glow); }
+
+  /* ── SLIDE NUMBER ── */
+  .slide-num {
+    position: absolute; top: 32px; right: 40px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; color: var(--text-muted);
+    letter-spacing: 3px;
+  }
+
+  /* ── LOGO BAR ── */
+  .logo-bar {
+    position: absolute; top: 28px; left: 40px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-flame {
+    width: 28px; height: 28px;
+    position: relative;
+  }
+  .logo-flame svg { width: 100%; height: 100%; }
+  .logo-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 15px; letter-spacing: 3px;
+    color: var(--fire2);
+  }
+
+  /* ══════════════════════════════
+     SLIDE 1 — TITLE
+  ══════════════════════════════ */
+  .s1-bg {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 70% 60% at 50% 60%, rgba(255,69,0,.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .s1-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(255,69,0,.1);
+    animation: pulseRing 4s ease-in-out infinite;
+  }
+  .s1-ring:nth-child(1) { width: 420px; height: 420px; animation-delay: 0s; }
+  .s1-ring:nth-child(2) { width: 620px; height: 620px; animation-delay: 1s; }
+  .s1-ring:nth-child(3) { width: 820px; height: 820px; animation-delay: 2s; }
+  @keyframes pulseRing {
+    0%,100% { opacity: .12; transform: scale(1); }
+    50% { opacity: .25; transform: scale(1.03); }
+  }
+
+  .s1-content { position: relative; text-align: center; z-index: 2; }
+  .s1-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; letter-spacing: 5px;
+    color: var(--fire2); text-transform: uppercase;
+    margin-bottom: 20px;
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .s1-tag::before, .s1-tag::after {
+    content: ''; display: block;
+    width: 32px; height: 1px;
+    background: var(--fire2);
+  }
+  .s1-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(52px, 7vw, 88px);
+    letter-spacing: 4px;
+    line-height: 1;
+    background: linear-gradient(135deg, #fff 20%, var(--fire3) 60%, var(--fire1) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 32px rgba(255,106,0,.4));
+    margin-bottom: 16px;
+  }
+  .s1-subtitle {
+    font-size: 16px; font-weight: 300;
+    color: var(--text-dim); letter-spacing: 2px;
+    margin-bottom: 40px;
+  }
+  .s1-subtitle span { color: var(--fire3); font-weight: 500; }
+  .s1-meta {
+    display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
+  }
+  .s1-badge {
+    padding: 8px 20px;
+    border: 1px solid rgba(255,69,0,.3);
+    background: rgba(255,69,0,.07);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 2px;
+    color: var(--fire3);
+    clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+  }
+
+  /* ══════════════════════════════
+     SLIDE 2 — TỔNG QUAN
+  ══════════════════════════════ */
+  .section-head {
+    text-align: center; margin-bottom: 36px;
+  }
+  .section-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 5px;
+    color: var(--fire2); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(40px, 4.5vw, 60px);
+    letter-spacing: 3px;
+    background: linear-gradient(90deg, var(--text) 40%, var(--fire3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 28px;
+    width: 100%; max-width: 1000px;
+  }
+  .stat-cards {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .stat-card {
+    padding: 18px 22px;
+    background: var(--dark2);
+    border-left: 3px solid var(--fire2);
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::after {
+    content: '';
+    position: absolute; top: 0; right: 0;
+    width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,106,0,.04));
+  }
+  .stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px; color: var(--fire3); letter-spacing: 2px;
+  }
+  .stat-lbl { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; margin-top: 2px; }
+
+  .tech-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .tech-table tr { border-bottom: 1px solid rgba(255,255,255,.05); }
+  .tech-table tr:last-child { border-bottom: none; }
+  .tech-table td {
+    padding: 11px 14px;
+    font-size: 15px;
+    vertical-align: middle;
+  }
+  .tech-table td:first-child {
+    color: var(--text-muted);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; letter-spacing: 1px;
+    white-space: nowrap;
+    width: 140px;
+  }
+  .tech-table td:last-child { color: var(--text); }
+  .tech-table tr:hover td { background: rgba(255,69,0,.04); }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    margin: 2px 3px 2px 0;
+  }
+  .pill-fire { background: rgba(255,69,0,.18); color: var(--fire2); border: 1px solid rgba(255,69,0,.3); }
+  .pill-blue { background: rgba(88,166,255,.12); color: var(--accent-blue); border: 1px solid rgba(88,166,255,.2); }
+  .pill-green { background: rgba(57,211,83,.1); color: var(--accent-green); border: 1px solid rgba(57,211,83,.2); }
+  .pill-purple { background: rgba(188,140,255,.1); color: var(--accent-purple); border: 1px solid rgba(188,140,255,.2); }
+
+  .card-panel {
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.06);
+    padding: 22px 24px;
+  }
+
+  /* ══════════════════════════════
+     SLIDE 3 — KIẾN TRÚC
+  ══════════════════════════════ */
+  .arch-diagram {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    width: 100%; max-width: 900px;
+  }
+  .arch-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    justify-content: center;
+  }
+  .arch-box {
+    border: 1px solid rgba(255,69,0,.3);
+    background: var(--dark2);
+    padding: 16px 22px;
+    position: relative;
+    flex: 1;
+    max-width: 220px;
+    text-align: center;
+  }
+  .arch-box-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px; letter-spacing: 2px;
+    color: var(--fire3); margin-bottom: 6px;
+  }
+  .arch-box-sub {
+    font-size: 12px; color: var(--text-muted);
+    line-height: 1.5;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: .5px;
+  }
+  .arch-box.highlight { border-color: var(--fire2); background: rgba(255,69,0,.08); }
+  .arch-box.highlight .arch-box-title { color: var(--ember); }
+
+  .arch-arrow {
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; flex-shrink: 0;
+    color: var(--fire2); font-size: 16px;
+  }
+  .arch-arrow-down {
+    height: 30px; display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    color: var(--fire2); font-size: 16px;
+  }
+  .arch-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; color: var(--text-muted);
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .arch-bottom-row {
+    display: flex; gap: 12px; width: 100%; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .arch-mini {
+    flex: 1; min-width: 140px; max-width: 190px;
+    border: 1px solid rgba(88,166,255,.2);
+    background: rgba(88,166,255,.05);
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .arch-mini-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--accent-blue); margin-bottom: 4px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 1px;
+  }
+  .arch-mini-sub { font-size: 10px; color: var(--text-muted); }
+
+  .data-flow {
+    width: 100%; max-width: 900px;
+    margin-top: 18px;
+    display: flex; align-items: center; gap: 0;
+  }
+  .df-step {
+    flex: 1;
+    padding: 11px 13px;
+    background: var(--dark2);
+    border-top: 2px solid var(--fire1);
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: .5px;
+    position: relative;
+  }
+  .df-step::after {
+    content: '→';
+    position: absolute; right: -10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--fire2); font-size: 16px;
+    z-index: 1;
+  }
+  .df-step:last-child::after { display: none; }
+  .df-step .df-num {
+    font-size: 11px; color: var(--fire2);
+    letter-spacing: 2px; margin-bottom: 3px;
+  }
+
+  /* ══════════════════════════════
+     SLIDE 4 — PIPELINE
+  ══════════════════════════════ */
+  .pipeline-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    width: 100%; max-width: 1000px;
+  }
+  .stage-card {
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.06);
+    padding: 14px 12px;
+    display: flex; flex-direction: column;
+    align-items: flex-start; gap: 6px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .stage-card::before {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--fire1), var(--fire3));
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .3s;
+  }
+  .stage-card:hover::before { transform: scaleX(1); }
+  .stage-card:hover { border-color: rgba(255,69,0,.3); }
+  .stage-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px; line-height: 1;
+    color: rgba(255,106,0,.2);
+    position: absolute; right: 10px; top: 8px;
+  }
+  .stage-icon { font-size: 20px; margin-bottom: 2px; }
+  .stage-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; color: var(--fire3);
+    letter-spacing: 1px;
+    line-height: 1.3;
+  }
+  .stage-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+  .stage-badge {
+    font-size: 11px; letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+  .stage-fatal { background: rgba(255,69,0,.15); color: var(--fire2); border: 1px solid rgba(255,69,0,.25); }
+  .stage-ok { background: rgba(57,211,83,.1); color: var(--accent-green); border: 1px solid rgba(57,211,83,.2); }
+
+  /* ══════════════════════════════
+     SLIDE 5 — DATASET
+  ══════════════════════════════ */
+  .dataset-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%; max-width: 960px;
+  }
+  .dataset-left { display: flex; flex-direction: column; gap: 16px; }
+
+  .bar-chart { display: flex; flex-direction: column; gap: 12px; }
+  .bar-row { display: flex; flex-direction: column; gap: 5px; }
+  .bar-meta {
+    display: flex; justify-content: space-between;
+    font-size: 14px;
+  }
+  .bar-label { color: var(--text-dim); letter-spacing: 1px; }
+  .bar-val { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--fire3); letter-spacing: 1px; }
+  .bar-track {
+    height: 8px; background: var(--dark3);
+    border-radius: 2px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--fire1), var(--fire3));
+    transition: width 1s cubic-bezier(.4,0,.2,1);
+    box-shadow: 0 0 8px rgba(255,69,0,.4);
+  }
+  .bar-fill.smoke { background: linear-gradient(90deg, #445, #889); box-shadow: none; }
+  .bar-fill.val { background: linear-gradient(90deg, #1a5276, var(--accent-blue)); box-shadow: 0 0 8px rgba(88,166,255,.3); }
+  .bar-fill.test { background: linear-gradient(90deg, #1e8449, var(--accent-green)); box-shadow: 0 0 8px rgba(57,211,83,.3); }
+
+  .class-boxes { display: flex; gap: 12px; }
+  .class-box {
+    flex: 1; padding: 16px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: var(--dark2);
+    text-align: center;
+  }
+  .class-icon { font-size: 28px; margin-bottom: 8px; }
+  .class-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px; letter-spacing: 2px; color: var(--fire3);
+  }
+  .class-id {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; color: var(--text-muted); margin-top: 4px;
+  }
+
+  .remap-note {
+    background: rgba(255,204,68,.07);
+    border: 1px solid rgba(255,204,68,.2);
+    border-left: 3px solid var(--ember);
+    padding: 12px 16px;
+    font-size: 13px; color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .remap-note strong { color: var(--ember); }
+
+  .total-stat {
+    text-align: center; padding: 20px;
+    background: var(--dark2);
+    border: 1px solid rgba(255,69,0,.2);
+    position: relative; overflow: hidden;
+  }
+  .total-stat::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(255,69,0,.06), transparent 70%);
+  }
+  .total-big {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px; letter-spacing: 3px;
+    background: linear-gradient(135deg, var(--fire3), var(--fire1));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative; z-index: 1;
+  }
+  .total-sub { font-size: 14px; color: var(--text-muted); letter-spacing: 2px; position: relative; z-index: 1; }
+
+  /* ══════════════════════════════
+     SLIDE 6 — TRAINING
+  ══════════════════════════════ */
+  .training-layout {
+    display: flex; flex-direction: column;
+    gap: 24px; width: 100%; max-width: 960px;
+  }
+  .train-stages {
+    display: flex; gap: 0; align-items: stretch;
+    position: relative;
+  }
+  .train-stage {
+    flex: 1;
+    background: var(--dark2);
+    padding: 22px 20px;
+    border: 1px solid rgba(255,255,255,.06);
+    position: relative;
+    overflow: hidden;
+  }
+  .train-stage + .train-stage { border-left: none; }
+  .train-stage::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .train-stage.s0::before { background: rgba(255,255,255,.15); }
+  .train-stage.s1::before { background: linear-gradient(90deg, var(--fire1), var(--fire3)); }
+  .train-stage.s2::before { background: linear-gradient(90deg, var(--fire3), var(--ember)); box-shadow: 0 0 12px rgba(255,158,0,.5); }
+  .train-stage-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 3px; color: var(--text-muted);
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .train-map {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px; letter-spacing: 2px; line-height: 1;
+    color: var(--fire3);
+  }
+  .train-map.best { color: var(--ember); filter: drop-shadow(0 0 12px rgba(255,204,68,.4)); }
+  .train-map-label {
+    font-size: 12px; color: var(--text-muted);
+    letter-spacing: 2px; margin-bottom: 14px;
+  }
+  .train-params { display: flex; flex-wrap: wrap; gap: 6px; }
+  .train-param {
+    padding: 4px 10px;
+    background: var(--dark3);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; color: var(--text-dim);
+    letter-spacing: .5px;
+  }
+  .train-arrow {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; flex-shrink: 0;
+    color: var(--fire2); font-size: 20px;
+    background: var(--dark1);
+    border-top: 1px solid rgba(255,255,255,.06);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    position: relative; z-index: 1;
+  }
+
+  .prod-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 20px;
+    border: 1px solid rgba(255,204,68,.4);
+    background: rgba(255,204,68,.07);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px; color: var(--ember); letter-spacing: 2px;
+  }
+  .prod-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+
+  .metrics-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .metric-chip {
+    flex: 1; min-width: 130px;
+    padding: 12px 14px;
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.06);
+    border-bottom: 2px solid var(--fire2);
+  }
+  .metric-chip-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 30px; color: var(--fire3); letter-spacing: 1px;
+  }
+  .metric-chip-lbl { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; margin-top: 2px; }
+
+  /* ══════════════════════════════
+     SLIDE 7 — API
+  ══════════════════════════════ */
+  .api-layout {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 24px;
+    width: 100%; max-width: 1000px;
+  }
+  .endpoint-table { width: 100%; border-collapse: collapse; }
+  .endpoint-table th {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 3px;
+    color: var(--text-muted); text-transform: uppercase;
+    padding: 9px 11px; text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .endpoint-table td { padding: 10px 11px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+  .endpoint-table tr:last-child td { border-bottom: none; }
+  .method {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; padding: 3px 9px;
+    border-radius: 2px; letter-spacing: 1px; font-weight: 700;
+  }
+  .get { background: rgba(57,211,83,.12); color: var(--accent-green); }
+  .post { background: rgba(88,166,255,.12); color: var(--accent-blue); }
+  .put { background: rgba(255,158,0,.12); color: var(--fire3); }
+  .delete { background: rgba(255,69,0,.12); color: var(--fire1); }
+  .ws { background: rgba(188,140,255,.12); color: var(--accent-purple); }
+  .endpoint-path {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; color: var(--text-dim);
+  }
+  .endpoint-desc { font-size: 13px; color: var(--text-muted); }
+
+  .code-block {
+    background: var(--dark0);
+    border: 1px solid rgba(255,255,255,.07);
+    border-left: 3px solid var(--fire2);
+    padding: 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; line-height: 1.7;
+    color: var(--text-dim);
+    overflow: auto;
+  }
+  .code-key { color: var(--accent-blue); }
+  .code-str { color: var(--accent-green); }
+  .code-num { color: var(--fire3); }
+  .code-comment { color: var(--text-muted); }
+
+  .api-config {
+    display: flex; flex-direction: column; gap: 10px; margin-top: 12px;
+  }
+  .config-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px;
+    background: var(--dark2);
+    border-right: 2px solid var(--fire2);
+  }
+  .config-key { font-family: 'Share Tech Mono', monospace; font-size: 13px; color: var(--text-muted); }
+  .config-val { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--fire3); letter-spacing: 1px; }
+
+  /* ══════════════════════════════
+     SLIDE 8 — MONITORING
+  ══════════════════════════════ */
+  .monitoring-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%; max-width: 1000px;
+    margin-bottom: 20px;
+  }
+  .mon-card {
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.06);
+    padding: 20px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .mon-card-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .mon-icon { font-size: 24px; }
+  .mon-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px; letter-spacing: 2px;
+  }
+  .mon-port {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; color: var(--text-muted);
+    letter-spacing: 1px; margin-bottom: 10px;
+  }
+  .mon-items { display: flex; flex-direction: column; gap: 6px; }
+  .mon-item { font-size: 13px; color: var(--text-dim); display: flex; align-items: flex-start; gap: 6px; }
+  .mon-item::before { content: '›'; color: var(--fire2); flex-shrink: 0; }
+  .mon-card.prom .mon-name { color: #e6522c; }
+  .mon-card.graf .mon-name { color: #f46800; }
+  .mon-card.evid .mon-name { color: var(--accent-purple); }
+  .mon-card.evid { border-color: rgba(188,140,255,.15); }
+
+  .alert-rules {
+    display: flex; gap: 12px; width: 100%; max-width: 1000px;
+    flex-wrap: wrap;
+  }
+  .alert-rule {
+    flex: 1; min-width: 200px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: rgba(255,69,0,.07);
+    border: 1px solid rgba(255,69,0,.2);
+    border-left: 3px solid var(--fire1);
+  }
+  .alert-icon { font-size: 22px; flex-shrink: 0; }
+  .alert-text { font-size: 13px; color: var(--text-dim); }
+  .alert-text strong { color: var(--fire3); display: block; margin-bottom: 2px; font-weight: 600; font-size: 14px; }
+
+  /* ══════════════════════════════
+     SLIDE 9 — CI/CD
+  ══════════════════════════════ */
+  .cicd-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%; max-width: 1000px;
+  }
+  .pipeline-flow {
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .flow-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px; letter-spacing: 3px;
+    color: var(--fire3); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .flow-title .ft-tag {
+    font-size: 11px; padding: 2px 10px;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 2px; border-radius: 2px;
+  }
+  .ci-tag { background: rgba(57,211,83,.12); color: var(--accent-green); border: 1px solid rgba(57,211,83,.2); }
+  .cd-tag { background: rgba(88,166,255,.12); color: var(--accent-blue); border: 1px solid rgba(88,166,255,.2); }
+
+  .flow-step {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px;
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.05);
+    border-bottom: none;
+    position: relative;
+  }
+  .flow-step:last-child { border-bottom: 1px solid rgba(255,255,255,.05); }
+  .flow-step-icon { font-size: 16px; flex-shrink: 0; padding-top: 2px; }
+  .flow-step-body { flex: 1; }
+  .flow-step-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .flow-step-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .flow-connector {
+    width: 1px; height: 8px;
+    background: rgba(255,69,0,.2);
+    margin-left: 25px;
+  }
+
+  .runner-box {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.06);
+    border-top: 2px solid var(--fire2);
+  }
+  .runner-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 3px; color: var(--fire2);
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  .runner-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .runner-tag {
+    padding: 4px 12px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: var(--dark3);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* ══════════════════════════════
+     SLIDE 10 — KẾT LUẬN
+  ══════════════════════════════ */
+  .conclusion-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    width: 100%; max-width: 960px;
+  }
+  .achievement-list { display: flex; flex-direction: column; gap: 12px; }
+  .achievement {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 16px;
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.05);
+    transition: border-color .2s;
+  }
+  .achievement:hover { border-color: rgba(255,69,0,.3); }
+  .ach-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px; line-height: 1;
+    color: rgba(255,106,0,.3);
+    flex-shrink: 0; width: 24px;
+  }
+  .ach-text { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
+  .ach-text strong { color: var(--fire3); display: block; font-size: 15px; }
+
+  .demo-card {
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .demo-url {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 14px 18px;
+    background: var(--dark0);
+    border: 1px solid rgba(255,69,0,.3);
+    color: var(--fire3);
+    letter-spacing: 1px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .demo-url .url-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); animation: blink 1s ease-in-out infinite; flex-shrink: 0; }
+
+  .final-stats {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .final-stat {
+    padding: 14px 16px;
+    background: var(--dark2);
+    border-left: 3px solid var(--fire2);
+    text-align: center;
+  }
+  .final-stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 34px; color: var(--fire3); letter-spacing: 1px;
+  }
+  .final-stat-lbl { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; }
+
+  .github-link {
+    padding: 12px 18px;
+    background: var(--dark2);
+    border: 1px solid rgba(255,255,255,.08);
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+  .github-link span { color: var(--accent-blue); }
+
+  /* ── PROGRESS BAR ── */
+  #progress {
+    position: fixed; top: 0; left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--fire1), var(--fire3), var(--ember));
+    transition: width .4s ease;
+    z-index: 200;
+    box-shadow: 0 0 8px rgba(255,69,0,.6);
+  }
+
+  /* ── KEYBOARD HINT ── */
+  #hint {
+    position: fixed; bottom: 88px; right: 36px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--text-muted);
+    letter-spacing: 2px;
+    opacity: 1; transition: opacity .5s;
+  }
+  #hint.hidden { opacity: 0; }
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+<div id="progress"></div>
+
+<!-- LOGO BAR appears on all slides via JS -->
+
+<div class="deck" id="deck">
+
+  <!-- ══ SLIDE 1 — TITLE ══ -->
+  <div class="slide active" id="slide-1">
+    <div class="s1-bg"></div>
+    <div class="s1-ring"></div>
+    <div class="s1-ring"></div>
+    <div class="s1-ring"></div>
+    <div class="s1-content">
+      <div class="s1-tag">MSA-28 Final Project</div>
+      <div class="s1-title">Hệ Thống Phát Hiện<br>Cháy Real-time</div>
+      <div class="s1-subtitle">
+        Fire Detection <span>YOLOv10x</span> — MLOps Pipeline
+      </div>
+      <div class="s1-meta">
+        <div class="s1-badge">📍 Nhóm MSA-28</div>
+        <div class="s1-badge">🗓 2026</div>
+        <div class="s1-badge">🔥 D-Fire Dataset</div>
+        <div class="s1-badge">📊 mAP50 = 0.731</div>
+      </div>
+    </div>
+    <div class="slide-num">01 / 10</div>
+  </div>
+
+  <!-- ══ SLIDE 2 — TỔNG QUAN ══ -->
+  <div class="slide" id="slide-2">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">02 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Overview</div>
+      <div class="section-title">Tổng Quan Dự Án</div>
+    </div>
+    <div class="overview-grid">
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-val">21,527</div>
+          <div class="stat-lbl">Tổng số ảnh huấn luyện (D-Fire Dataset)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">0.731</div>
+          <div class="stat-lbl">mAP50 trên Test Set (Production Model v9)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">12</div>
+          <div class="stat-lbl">Giai đoạn trong MLOps Pipeline tự động</div>
+        </div>
+      </div>
+      <div class="card-panel">
+        <div class="section-label" style="margin-bottom:14px;">Tech Stack</div>
+        <table class="tech-table">
+          <tr>
+            <td>Model</td>
+            <td><span class="pill pill-fire">YOLOv10x</span></td>
+          </tr>
+          <tr>
+            <td>Tracking</td>
+            <td><span class="pill pill-fire">MLflow</span><span class="pill pill-blue">PostgreSQL</span><span class="pill pill-blue">MinIO</span></td>
+          </tr>
+          <tr>
+            <td>API</td>
+            <td><span class="pill pill-green">FastAPI</span><span class="pill pill-green">WebSocket</span><span class="pill pill-blue">OpenCV</span></td>
+          </tr>
+          <tr>
+            <td>Monitoring</td>
+            <td><span class="pill pill-fire">Prometheus</span><span class="pill pill-fire">Grafana</span><span class="pill pill-purple">Evidently</span></td>
+          </tr>
+          <tr>
+            <td>CI/CD</td>
+            <td><span class="pill pill-blue">GitHub Actions</span></td>
+          </tr>
+          <tr>
+            <td>Container</td>
+            <td><span class="pill pill-blue">Docker</span><span class="pill pill-purple">GHCR</span></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 3 — KIẾN TRÚC ══ -->
+  <div class="slide" id="slide-3">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">03 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Architecture</div>
+      <div class="section-title">Kiến Trúc Hệ Thống</div>
+    </div>
+    <div class="arch-diagram">
+      <!-- Row 1: Pipeline -->
+      <div class="arch-row">
+        <div class="arch-box highlight" style="max-width:100%;">
+          <div class="arch-box-title">ML Pipeline — 12 Stages</div>
+          <div class="arch-box-sub">LoadConfig → Train → ModelEvaluate → ModelRegister → MonitoringCheck</div>
+        </div>
+      </div>
+      <div class="arch-arrow-down">↓ <span style="font-size:10px;color:var(--text-muted);margin-left:8px;letter-spacing:2px;">registers model</span></div>
+
+      <!-- Row 2: Registry + API -->
+      <div class="arch-row" style="gap:12px;">
+        <div class="arch-box highlight" style="max-width:300px;">
+          <div class="arch-box-title">MLflow Registry</div>
+          <div class="arch-box-sub">PostgreSQL backend<br>MinIO artifact store<br>fire-detection-yolo v9 · alias:production</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box" style="max-width:300px;">
+          <div class="arch-box-title">FastAPI :8000</div>
+          <div class="arch-box-sub">GET /health · GET /metrics<br>WS /ws/{camera_id}<br>POST /api/cameras</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-box" style="max-width:300px;border-color:rgba(88,166,255,.3);">
+          <div class="arch-box-title" style="color:var(--accent-blue);">Monitoring Stack</div>
+          <div class="arch-box-sub">Prometheus :9090<br>Grafana :3000<br>Evidently :8001</div>
+        </div>
+      </div>
+
+      <!-- Data flow strip -->
+      <div style="margin-top:20px;width:100%;">
+        <div class="section-label" style="margin-bottom:8px;text-align:center;">Live Inference Data Flow</div>
+        <div class="data-flow">
+          <div class="df-step"><div class="df-num">01</div>Camera RTSP/Webcam</div>
+          <div class="df-step"><div class="df-num">02</div>StreamManager (OpenCV)</div>
+          <div class="df-step"><div class="df-num">03</div>FireDetector (YOLO)</div>
+          <div class="df-step"><div class="df-num">04</div>WebSocket Clients</div>
+          <div class="df-step"><div class="df-num">05</div>Prometheus + Evidently</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 4 — PIPELINE ══ -->
+  <div class="slide" id="slide-4">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">04 / 10</div>
+    <div class="section-head" style="margin-bottom:20px;">
+      <div class="section-label">ML Pipeline</div>
+      <div class="section-title">Pipeline 12 Giai Đoạn</div>
+    </div>
+    <div class="pipeline-grid">
+      <div class="stage-card">
+        <span class="stage-num">1</span>
+        <div class="stage-icon">⚙️</div>
+        <div class="stage-name">LoadConfig</div>
+        <div class="stage-desc">Nạp tất cả YAML configs vào context</div>
+        <span class="stage-badge stage-fatal">FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">2</span>
+        <div class="stage-icon">🖥️</div>
+        <div class="stage-name">EnvFingerprint</div>
+        <div class="stage-desc">Snapshot OS / GPU / Python env</div>
+        <span class="stage-badge stage-fatal">FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">3</span>
+        <div class="stage-icon">⚖️</div>
+        <div class="stage-name">InitWeightsManifest</div>
+        <div class="stage-desc">Manifest hash của init weights</div>
+        <span class="stage-badge stage-fatal">FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">4</span>
+        <div class="stage-icon">✅</div>
+        <div class="stage-name">DatasetValidate</div>
+        <div class="stage-desc">Kiểm tra layout images/labels</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">5</span>
+        <div class="stage-icon">📊</div>
+        <div class="stage-name">DatasetAnalyze</div>
+        <div class="stage-desc">Phân phối class + thống kê bbox</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">6</span>
+        <div class="stage-icon">📄</div>
+        <div class="stage-name">DatasetReportExport</div>
+        <div class="stage-desc">Xuất dataset_report.md + stats.json</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">7</span>
+        <div class="stage-icon">🔬</div>
+        <div class="stage-name">MLflowSmokeRun</div>
+        <div class="stage-desc">Log smoke test run vào MLflow</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">8</span>
+        <div class="stage-icon">🏋️</div>
+        <div class="stage-name">Train</div>
+        <div class="stage-desc">Fine-tune YOLOv10x (nếu enabled)</div>
+        <span class="stage-badge stage-fatal">FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">9</span>
+        <div class="stage-icon">📈</div>
+        <div class="stage-name">ModelEvaluate</div>
+        <div class="stage-desc">mAP50, precision, recall per class</div>
+        <span class="stage-badge stage-fatal">FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">10</span>
+        <div class="stage-icon">📝</div>
+        <div class="stage-name">ExperimentSummaryExport</div>
+        <div class="stage-desc">Top-20 runs → experiment_summary.md</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">11</span>
+        <div class="stage-icon">🗃️</div>
+        <div class="stage-name">ModelRegister</div>
+        <div class="stage-desc">Đăng ký best.pt lên MLflow Registry</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+      <div class="stage-card">
+        <span class="stage-num">12</span>
+        <div class="stage-icon">🩺</div>
+        <div class="stage-name">MonitoringCheck</div>
+        <div class="stage-desc">Health-check Prometheus/Grafana/Evidently</div>
+        <span class="stage-badge stage-ok">NON-FATAL</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 5 — DATASET ══ -->
+  <div class="slide" id="slide-5">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">05 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Data</div>
+      <div class="section-title">Dataset — D-Fire</div>
+    </div>
+    <div class="dataset-layout">
+      <div class="dataset-left">
+        <div class="total-stat">
+          <div class="total-big">21,527</div>
+          <div class="total-sub">TỔNG SỐ ẢNH</div>
+        </div>
+        <div class="bar-chart">
+          <div class="bar-row">
+            <div class="bar-meta">
+              <span class="bar-label">TRAIN</span>
+              <span class="bar-val">14,122</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:65.6%"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-meta">
+              <span class="bar-label">VALIDATION</span>
+              <span class="bar-val">3,099</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill val" style="width:14.4%"></div></div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-meta">
+              <span class="bar-label">TEST</span>
+              <span class="bar-val">4,306</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill test" style="width:20%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="class-boxes">
+          <div class="class-box">
+            <div class="class-icon">🔥</div>
+            <div class="class-name">Fire</div>
+            <div class="class-id">class_id = 0</div>
+          </div>
+          <div class="class-box">
+            <div class="class-icon">🌫️</div>
+            <div class="class-name">Smoke</div>
+            <div class="class-id">class_id = 1</div>
+          </div>
+        </div>
+        <div class="remap-note">
+          <strong>⚠️ Label Remapping:</strong><br>
+          D-Fire gốc: smoke=0 / fire=1<br>
+          Sau khi remap: <strong>fire=0 / smoke=1</strong><br>
+          để khớp với YOLOv10x init weights từ HuggingFace (fire=0, smoke=1)
+        </div>
+        <div class="card-panel" style="padding:14px 16px;">
+          <div class="section-label" style="margin-bottom:10px;">Format nhãn</div>
+          <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);line-height:2;">
+            YOLO format: <span style="color:var(--fire3);">&lt;class_id&gt; &lt;cx&gt; &lt;cy&gt; &lt;w&gt; &lt;h&gt;</span><br>
+            Normalized coordinates [0, 1]<br>
+            Cấu trúc: images/ + labels/ per split
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 6 — TRAINING ══ -->
+  <div class="slide" id="slide-6">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">06 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Model Training</div>
+      <div class="section-title">Kết Quả Huấn Luyện</div>
+    </div>
+    <div class="training-layout">
+      <div class="train-stages">
+        <div class="train-stage s0">
+          <div class="train-stage-label">Init Weights</div>
+          <div class="train-map">0.601</div>
+          <div class="train-map-label">mAP50 (val)</div>
+          <div class="train-params">
+            <span class="train-param">YOLOv10x</span>
+            <span class="train-param">HuggingFace</span>
+            <span class="train-param">64MB</span>
+          </div>
+        </div>
+        <div class="train-arrow">→</div>
+        <div class="train-stage s1">
+          <div class="train-stage-label">Stage 1 Fine-tune</div>
+          <div class="train-map" style="color:var(--fire3)">0.754</div>
+          <div class="train-map-label">mAP50 (val) ↑</div>
+          <div class="train-params">
+            <span class="train-param">freeze=10</span>
+            <span class="train-param">lr=0.0005</span>
+            <span class="train-param">20 epochs</span>
+            <span class="train-param">Head-only</span>
+          </div>
+        </div>
+        <div class="train-arrow">→</div>
+        <div class="train-stage s2">
+          <div class="train-stage-label">Stage 2 Fine-tune ★ PRODUCTION</div>
+          <div class="train-map best">0.731</div>
+          <div class="train-map-label">mAP50 (test) — Production</div>
+          <div class="train-params">
+            <span class="train-param">freeze=5</span>
+            <span class="train-param">lr=0.0002</span>
+            <span class="train-param">20 epochs</span>
+            <span class="train-param">Partial backbone</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div class="prod-badge">
+          <div class="prod-dot"></div>
+          MLflow Registry · fire-detection-yolo v9 · alias:production
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-muted);">
+          🖥️ NVIDIA RTX 3050 6GB · CUDA 11.8
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-chip">
+          <div class="metric-chip-val">0.722</div>
+          <div class="metric-chip-lbl">mAP50 (val) Stage 2</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-chip-val">0.731</div>
+          <div class="metric-chip-lbl">mAP50 (test) — Final</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-chip-val">0.458</div>
+          <div class="metric-chip-lbl">mAP50-95</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-chip-val">0.602</div>
+          <div class="metric-chip-lbl">Fire Recall</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-chip-val">0.730</div>
+          <div class="metric-chip-lbl">Smoke Recall</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 7 — API ══ -->
+  <div class="slide" id="slide-7">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">07 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Inference</div>
+      <div class="section-title">Inference API — FastAPI :8000</div>
+    </div>
+    <div class="api-layout">
+      <div>
+        <table class="endpoint-table">
+          <tr>
+            <th>Method</th><th>Path</th><th>Mô tả</th>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><span class="endpoint-path">/</span></td>
+            <td><span class="endpoint-desc">Live Dashboard (HTML)</span></td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><span class="endpoint-path">/health</span></td>
+            <td><span class="endpoint-desc">Health check</span></td>
+          </tr>
+          <tr>
+            <td><span class="method get">GET</span></td>
+            <td><span class="endpoint-path">/metrics</span></td>
+            <td><span class="endpoint-desc">Prometheus scrape</span></td>
+          </tr>
+          <tr>
+            <td><span class="method post">POST</span></td>
+            <td><span class="endpoint-path">/api/cameras</span></td>
+            <td><span class="endpoint-desc">Thêm camera (RTSP/webcam)</span></td>
+          </tr>
+          <tr>
+            <td><span class="method delete">DELETE</span></td>
+            <td><span class="endpoint-path">/api/cameras/{id}</span></td>
+            <td><span class="endpoint-desc">Xóa camera stream</span></td>
+          </tr>
+          <tr>
+            <td><span class="method put">PUT</span></td>
+            <td><span class="endpoint-path">/api/config</span></td>
+            <td><span class="endpoint-desc">Cập nhật ngưỡng confidence</span></td>
+          </tr>
+          <tr>
+            <td><span class="method ws">WS</span></td>
+            <td><span class="endpoint-path">/ws/{camera_id}</span></td>
+            <td><span class="endpoint-desc">Live stream + detections</span></td>
+          </tr>
+        </table>
+        <div class="api-config" style="margin-top:14px;">
+          <div class="config-row">
+            <span class="config-key">confidence_threshold</span>
+            <span class="config-val">0.40</span>
+          </div>
+          <div class="config-row">
+            <span class="config-key">iou_threshold</span>
+            <span class="config-val">0.50</span>
+          </div>
+          <div class="config-row">
+            <span class="config-key">target_fps</span>
+            <span class="config-val">15 FPS</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label" style="margin-bottom:10px;">WebSocket Frame Response</div>
+        <div class="code-block">
+<span class="code-comment">// ws://localhost:8000/ws/{camera_id}</span>
+{
+  <span class="code-key">"type"</span>: <span class="code-str">"frame"</span>,
+  <span class="code-key">"camera_id"</span>: <span class="code-str">"abc12345"</span>,
+  <span class="code-key">"timestamp"</span>: <span class="code-num">1711234567.89</span>,
+  <span class="code-key">"jpeg_b64"</span>: <span class="code-str">"&lt;base64 JPEG&gt;"</span>,
+  <span class="code-key">"detections"</span>: [
+    {
+      <span class="code-key">"class"</span>: <span class="code-str">"fire"</span>,
+      <span class="code-key">"confidence"</span>: <span class="code-num">0.87</span>,
+      <span class="code-key">"bbox"</span>: [<span class="code-num">x1, y1, x2, y2</span>]
+    },
+    {
+      <span class="code-key">"class"</span>: <span class="code-str">"smoke"</span>,
+      <span class="code-key">"confidence"</span>: <span class="code-num">0.72</span>,
+      <span class="code-key">"bbox"</span>: [<span class="code-num">x1, y1, x2, y2</span>]
+    }
+  ]
+}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 8 — MONITORING ══ -->
+  <div class="slide" id="slide-8">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">08 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Observability</div>
+      <div class="section-title">Monitoring Stack</div>
+    </div>
+    <div class="monitoring-grid">
+      <div class="mon-card prom">
+        <div class="mon-card-head">
+          <span class="mon-icon">📡</span>
+          <span class="mon-name">Prometheus</span>
+        </div>
+        <div class="mon-port">localhost:9090</div>
+        <div class="mon-items">
+          <div class="mon-item">fire_inference_latency_seconds (Histogram)</div>
+          <div class="mon-item">fire_detections_total {class_name}</div>
+          <div class="mon-item">fire_detection_confidence {class_name}</div>
+          <div class="mon-item">fire_frames_processed_total {camera_id}</div>
+          <div class="mon-item">fire_active_cameras (Gauge)</div>
+          <div class="mon-item">fire_api_requests_total {method, endpoint}</div>
+        </div>
+      </div>
+      <div class="mon-card graf">
+        <div class="mon-card-head">
+          <span class="mon-icon">📊</span>
+          <span class="mon-name">Grafana</span>
+        </div>
+        <div class="mon-port">localhost:3000 · admin/admin</div>
+        <div class="mon-items">
+          <div class="mon-item">Dashboard: "Fire Detection — ML Monitoring"</div>
+          <div class="mon-item">Inference latency p50 / p95 / p99</div>
+          <div class="mon-item">Fire & smoke detection rate</div>
+          <div class="mon-item">Active cameras gauge</div>
+          <div class="mon-item">API request rate + error rate</div>
+          <div class="mon-item">Confidence distribution (fire + smoke)</div>
+        </div>
+      </div>
+      <div class="mon-card evid">
+        <div class="mon-card-head">
+          <span class="mon-icon">🧪</span>
+          <span class="mon-name">Evidently AI</span>
+        </div>
+        <div class="mon-port">localhost:8001</div>
+        <div class="mon-items">
+          <div class="mon-item">Drift detection: PSI / KS test</div>
+          <div class="mon-item">confidence_fire distribution drift</div>
+          <div class="mon-item">confidence_smoke distribution drift</div>
+          <div class="mon-item">detections_per_frame drift</div>
+          <div class="mon-item">Reference data: 300 test samples</div>
+          <div class="mon-item">Sample rate: 5% production frames</div>
+        </div>
+      </div>
+    </div>
+    <div class="alert-rules">
+      <div class="alert-rule">
+        <span class="alert-icon">⏱️</span>
+        <div class="alert-text">
+          <strong>Latency Alert</strong>
+          Inference p95 latency &gt; <span style="color:var(--fire2)">500ms</span> → trigger alert
+        </div>
+      </div>
+      <div class="alert-rule">
+        <span class="alert-icon">🚨</span>
+        <div class="alert-text">
+          <strong>Error Rate Alert</strong>
+          API error rate &gt; <span style="color:var(--fire2)">5%</span> → trigger alert
+        </div>
+      </div>
+      <div class="alert-rule">
+        <span class="alert-icon">📉</span>
+        <div class="alert-text">
+          <strong>Drift Alert</strong>
+          PSI/KS drift threshold &gt; <span style="color:var(--fire2)">0.1</span> → flag distribution shift
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 9 — CI/CD ══ -->
+  <div class="slide" id="slide-9">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">09 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Automation</div>
+      <div class="section-title">CI/CD Pipeline</div>
+    </div>
+    <div class="cicd-layout">
+      <div>
+        <div class="flow-title">
+          CI Workflow <span class="ft-tag ci-tag">ci.yml</span>
+        </div>
+        <div class="pipeline-flow">
+          <div class="flow-step">
+            <span class="flow-step-icon">🔍</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">Lint — ruff</div>
+              <div class="flow-step-desc">Kiểm tra code style + static analysis</div>
+            </div>
+          </div>
+          <div class="flow-connector"></div>
+          <div class="flow-step">
+            <span class="flow-step-icon">🧪</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">Tests + Coverage — pytest</div>
+              <div class="flow-step-desc">24 tests · pytest --cov=src → coverage.xml</div>
+            </div>
+          </div>
+          <div class="flow-connector"></div>
+          <div class="flow-step">
+            <span class="flow-step-icon">🔄</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">Pipeline Check</div>
+              <div class="flow-step-desc">python -m src.pipeline.orchestrator · Upload reports/</div>
+            </div>
+          </div>
+          <div class="flow-connector"></div>
+          <div class="flow-step">
+            <span class="flow-step-icon">📋</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">Build Summary</div>
+              <div class="flow-step-desc">Pass / Fail report + artifact upload</div>
+            </div>
+          </div>
+        </div>
+        <div class="runner-box">
+          <div class="runner-title">Self-hosted Runner</div>
+          <div class="runner-tags">
+            <span class="runner-tag">self-hosted</span>
+            <span class="runner-tag">Windows</span>
+            <span class="runner-tag">x64</span>
+            <span class="runner-tag">gpu</span>
+            <span class="runner-tag">RTX 3050</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="flow-title">
+          CD Workflow <span class="ft-tag cd-tag">cd.yml · push to main</span>
+        </div>
+        <div class="pipeline-flow">
+          <div class="flow-step">
+            <span class="flow-step-icon">📥</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">actions/checkout</div>
+              <div class="flow-step-desc">Checkout source code</div>
+            </div>
+          </div>
+          <div class="flow-connector"></div>
+          <div class="flow-step">
+            <span class="flow-step-icon">🔑</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">docker/login-action → ghcr.io</div>
+              <div class="flow-step-desc">Authenticate with GitHub Container Registry</div>
+            </div>
+          </div>
+          <div class="flow-connector"></div>
+          <div class="flow-step">
+            <span class="flow-step-icon">🏗️</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">docker/build-push-action</div>
+              <div class="flow-step-desc">Build Docker image · tag: sha-*, latest</div>
+            </div>
+          </div>
+          <div class="flow-connector"></div>
+          <div class="flow-step">
+            <span class="flow-step-icon">🚀</span>
+            <div class="flow-step-body">
+              <div class="flow-step-name">Push to GHCR</div>
+              <div class="flow-step-desc">ghcr.io/mrnmd2002/detectfire/fire-detection-api</div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block" style="margin-top:12px;font-size:10px;">
+docker pull ghcr.io/mrnmd2002/detectfire/<br>
+  fire-detection-api:<span style="color:var(--fire3)">latest</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 10 — KẾT LUẬN ══ -->
+  <div class="slide" id="slide-10">
+    <div class="logo-bar"><div class="logo-text">FIREDETECT</div></div>
+    <div class="slide-num">10 / 10</div>
+    <div class="section-head">
+      <div class="section-label">Conclusion</div>
+      <div class="section-title">Demo & Kết Luận</div>
+    </div>
+    <div class="conclusion-layout">
+      <div class="achievement-list">
+        <div class="achievement">
+          <div class="ach-num">01</div>
+          <div class="ach-text">
+            <strong>12-Stage Automated Pipeline</strong>
+            Toàn bộ MLOps lifecycle được tự động hóa từ config load đến monitoring check
+          </div>
+        </div>
+        <div class="achievement">
+          <div class="ach-num">02</div>
+          <div class="ach-text">
+            <strong>Production Model — mAP50 = 0.731</strong>
+            YOLOv10x fine-tuned qua 2 stage progressive unfreezing trên 21,527 ảnh
+          </div>
+        </div>
+        <div class="achievement">
+          <div class="ach-num">03</div>
+          <div class="ach-text">
+            <strong>Real-time WebSocket Streaming</strong>
+            Camera RTSP/webcam → YOLO inference → bounding box broadcast tới browser
+          </div>
+        </div>
+        <div class="achievement">
+          <div class="ach-num">04</div>
+          <div class="ach-text">
+            <strong>Automated Drift Detection</strong>
+            Evidently AI giám sát phân phối confidence fire/smoke theo PSI/KS test
+          </div>
+        </div>
+        <div class="achievement">
+          <div class="ach-num">05</div>
+          <div class="ach-text">
+            <strong>Full CI/CD + Docker Registry</strong>
+            GitHub Actions tự động lint, test, pipeline, build và push image lên GHCR
+          </div>
+        </div>
+      </div>
+      <div class="demo-card">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--fire2);text-transform:uppercase;margin-bottom:4px;">Live Demo</div>
+        <div class="demo-url">
+          <div class="url-dot"></div>
+          http://localhost:8000
+        </div>
+        <div class="final-stats">
+          <div class="final-stat">
+            <div class="final-stat-val">12</div>
+            <div class="final-stat-lbl">Pipeline Stages</div>
+          </div>
+          <div class="final-stat">
+            <div class="final-stat-val">0.731</div>
+            <div class="final-stat-lbl">mAP50 Test</div>
+          </div>
+          <div class="final-stat">
+            <div class="final-stat-val">21K+</div>
+            <div class="final-stat-lbl">Training Images</div>
+          </div>
+          <div class="final-stat">
+            <div class="final-stat-val">24</div>
+            <div class="final-stat-lbl">Automated Tests</div>
+          </div>
+        </div>
+        <div class="github-link">
+          <span>⚡</span>
+          GitHub: <span>github.com/MrNMD2002/detectfire</span>
+        </div>
+        <div class="github-link" style="margin-top:0;">
+          <span>🐳</span>
+          Registry: <span>ghcr.io/mrnmd2002/detectfire</span>
+        </div>
+        <div style="text-align:center;margin-top:16px;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;background:linear-gradient(90deg,var(--fire1),var(--ember));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+            Cảm ơn!
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);letter-spacing:2px;margin-top:4px;">MSA-28 · 2026</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- NAV -->
+<div id="nav">
+  <button class="nav-btn" id="btnPrev">&#8592;</button>
+  <div class="pip-row" id="pips"></div>
+  <span id="counter">01 / 10</span>
+  <button class="nav-btn" id="btnNext">&#8594;</button>
+</div>
+
+<div id="hint">← → navigate · Space advance</div>
+
+<script>
+// ── VIEWPORT SCALE ─────────────────────────
+(function(){
+  const DESIGN_W = 1440, DESIGN_H = 810;
+  const deckEl = document.getElementById('deck');
+  function scale(){
+    const s = Math.min(window.innerWidth / DESIGN_W, window.innerHeight / DESIGN_H);
+    deckEl.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  scale();
+  window.addEventListener('resize', scale);
+})();
+
+// ── PARTICLES ──────────────────────────────
+(function(){
+  const canvas = document.getElementById('particles');
+  const ctx = canvas.getContext('2d');
+  let W, H, pts = [];
+
+  function resize(){ W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function Particle(){
+    this.reset = function(){
+      this.x = Math.random() * W;
+      this.y = H + 10;
+      this.vx = (Math.random() - .5) * .4;
+      this.vy = -(Math.random() * .8 + .3);
+      this.life = 0;
+      this.maxLife = 180 + Math.random() * 220;
+      this.size = Math.random() * 2 + .5;
+      this.hue = Math.random() < .6 ? 15 + Math.random()*20 : 35 + Math.random()*15;
+    };
+    this.reset();
+    this.life = Math.random() * 200;
+  }
+
+  for(let i = 0; i < 60; i++) pts.push(new Particle());
+
+  function tick(){
+    ctx.clearRect(0, 0, W, H);
+    pts.forEach(p => {
+      p.life++;
+      if(p.life > p.maxLife){ p.reset(); return; }
+      p.x += p.vx;
+      p.y += p.vy;
+      const alpha = Math.sin(p.life / p.maxLife * Math.PI) * .25;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(${p.hue},100%,60%,${alpha})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
+
+// ── SLIDE ENGINE ───────────────────────────
+const TOTAL = 10;
+let current = 1;
+
+const deck = document.getElementById('deck');
+const counter = document.getElementById('counter');
+const progress = document.getElementById('progress');
+const pipsContainer = document.getElementById('pips');
+const hint = document.getElementById('hint');
+
+// Build pips
+for(let i = 1; i <= TOTAL; i++){
+  const pip = document.createElement('div');
+  pip.className = 'pip' + (i===1?' on':'');
+  pip.addEventListener('click', () => goto(i));
+  pipsContainer.appendChild(pip);
+}
+
+function pad(n){ return String(n).padStart(2,'0'); }
+
+function goto(n){
+  if(n < 1 || n > TOTAL || n === current) return;
+  const from = document.getElementById('slide-'+current);
+  const to = document.getElementById('slide-'+n);
+
+  from.classList.remove('active');
+  from.classList.add('exit');
+  setTimeout(()=>{ from.classList.remove('exit'); }, 600);
+
+  to.classList.add('active');
+
+  current = n;
+  counter.textContent = pad(n) + ' / ' + pad(TOTAL);
+  progress.style.width = (n/TOTAL*100) + '%';
+
+  document.querySelectorAll('.pip').forEach((p,i)=>{
+    p.classList.toggle('on', i===n-1);
+  });
+}
+
+document.getElementById('btnPrev').addEventListener('click', ()=> goto(current-1));
+document.getElementById('btnNext').addEventListener('click', ()=> goto(current+1));
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') goto(current+1);
+  if(e.key === 'ArrowLeft' || e.key === 'ArrowUp') goto(current-1);
+  if(e.key === 'Home') goto(1);
+  if(e.key === 'End') goto(TOTAL);
+});
+
+// Touch swipe
+let touchX = 0;
+document.addEventListener('touchstart', e => touchX = e.touches[0].clientX);
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchX;
+  if(Math.abs(dx) > 50){ dx < 0 ? goto(current+1) : goto(current-1); }
+});
+
+// Init progress
+progress.style.width = (1/TOTAL*100) + '%';
+
+// Hide hint after 4s
+setTimeout(() => hint.classList.add('hidden'), 4000);
+</script>
+</body>
+</html>

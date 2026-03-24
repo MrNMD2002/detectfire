@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-03-23T09:40:18.574415+00:00",
+  "timestamp_utc": "2026-03-23T12:44:14.502970+00:00",
   "platform": {
     "system": "Windows",
     "release": "10",
@@ -79,6 +79,10 @@
     {
       "name": "contourpy",
       "version": "1.3.3"
+    },
+    {
+      "name": "coverage",
+      "version": "7.13.5"
     },
     {
       "name": "cryptography",
@@ -246,7 +250,7 @@
     },
     {
       "name": "opencv-python",
-      "version": "4.13.0.92"
+      "version": "4.11.0.86"
     },
     {
       "name": "opentelemetry-api",
@@ -349,6 +353,10 @@
       "version": "9.0.2"
     },
     {
+      "name": "pytest-cov",
+      "version": "7.1.0"
+    },
+    {
       "name": "python-dateutil",
       "version": "2.9.0.post0"
     },
@@ -379,6 +387,10 @@
     {
       "name": "requests",
       "version": "2.32.5"
+    },
+    {
+      "name": "ruff",
+      "version": "0.15.7"
     },
     {
       "name": "s3transfer",
@@ -497,9 +509,9 @@
     "CUDA_MODULE_LOADING": "LAZY"
   },
   "git": {
-    "commit_hash": null,
-    "branch": null,
-    "dirty": null,
-    "is_git_repo": false
+    "commit_hash": "2a42635",
+    "branch": "main",
+    "dirty": true,
+    "is_git_repo": true
   }
 }

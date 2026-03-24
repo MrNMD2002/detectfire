@@ -57,6 +57,12 @@ Thumbs.db
 *.tmp
 *.temp
 *.bak
+~$*
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
 
 # Docker volumes (if any local bind mounts)
 postgres_data/
